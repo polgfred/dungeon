@@ -113,7 +113,7 @@ def create_player(
 class Game:
     def __init__(self, seed: int, player: Player, rng: random.Random | None = None):
         self.rng = rng or random.Random(seed)
-        self.dungeon: Dungeon = generate_dungeon(self.rng)
+        self.dungeon = generate_dungeon(self.rng)
         self.player = player
         self.mode = Mode.EXPLORE
         self.encounter: Encounter | None = None
@@ -203,9 +203,7 @@ class Game:
         if self.mode == Mode.ENCOUNTER and self.encounter is not None:
             events.insert(
                 0,
-                Event.combat(
-                    f"You are facing an angry {self.encounter.monster_name}!"
-                ),
+                Event.combat(f"You are facing an angry {self.encounter.monster_name}!"),
             )
             events.insert(1, Event.info("Encounter mode: F=Fight  R=Run  S=Spell"))
         return events
