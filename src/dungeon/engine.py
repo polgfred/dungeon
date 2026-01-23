@@ -198,6 +198,9 @@ class Game:
             return "F/R/S> "
         return "--> "
 
+    def prompt(self) -> str:
+        return self._next_prompt([])
+
     def _current_room(self):
         return self.dungeon.rooms[self.player.z][self.player.y][self.player.x]
 

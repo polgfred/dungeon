@@ -6,7 +6,7 @@ import random
 import sys
 from pathlib import Path
 
-from dungeon.constants import Mode, Race
+from dungeon.constants import Race
 from dungeon.engine import Game, create_player, roll_base_stats
 from dungeon.types import Event
 
@@ -118,7 +118,7 @@ def _run_game(game: Game, *, resume: bool) -> None:
 
     while True:
         print()
-        command = input(_game_prompt(game))
+        command = input(game.prompt())
         if command.strip().startswith("/"):
             if loaded_game := _handle_slash_command(command, game):
                 game = loaded_game
@@ -129,14 +129,6 @@ def _run_game(game: Game, *, resume: bool) -> None:
         _render_events(result.events)
         if result.mode.name in {"GAME_OVER", "VICTORY"}:
             break
-
-
-def _game_prompt(game: Game) -> str:
-    if game.mode == Mode.ENCOUNTER:
-        return "F/R/S> "
-    if game._shop_state or game._awaiting_spell:
-        return "?> "
-    return "--> "
 
 
 def _handle_slash_command(command: str, game: Game) -> Game | None:
