@@ -65,34 +65,40 @@ def run() -> None:
 
 def _render_events(events: list[Event]) -> None:
     for event in events:
-        if event.kind == "MAP":
-            for row in event.data.get("grid", []):
-                print(row)
-        elif event.kind == "STATUS":
-            data = event.data
-            print("--------------------------------------")
-            print(f"GOLD - {data['gold']}       TREASURES - {data['treasures']}")
-            print(f"FLARES - {data['flares']}")
-            print(f"PROTECTIONS - {data['protection']}")
-            print(
-                f"FIREBALLS - {data['fireball']}      LIGHTNINGS - {data['lightning']}"
-            )
-            print(f"WEAKENINGS - {data['weaken']}       TELEPORTS - {data['teleport']}")
-            print(
-                f"You have {data['armor']} armour and your weapon is a {data['weapon']}."
-            )
-            print("--------------------------------------")
-        elif event.kind == "PROMPT":
-            print(event.text)
-            if event.data:
+        match event.kind:
+            case "MAP":
+                for row in event.data.get("grid", []):
+                    print(row)
+            case "STATUS":
+                data = event.data
+                print("--------------------------------------")
+                print(f"GOLD - {data['gold']}       TREASURES - {data['treasures']}")
+                print(f"FLARES - {data['flares']}")
+                print(f"PROTECTIONS - {data['protection']}")
                 print(
-                    f"1> Protection {event.data['protection']}  2> Fireball {event.data['fireball']}  "
-                    f"3> Lightning {event.data['lightning']}  4> Weaken {event.data['weaken']}  "
-                    f"5> Teleport {event.data['teleport']}"
+                    f"FIREBALLS - {data['fireball']}      LIGHTNINGS - {data['lightning']}"
                 )
-        else:
-            if event.text:
+                print(
+                    f"WEAKENINGS - {data['weaken']}       TELEPORTS - {data['teleport']}"
+                )
+                print(
+                    f"You have {data['armor']} armour and your weapon is a {data['weapon']}."
+                )
+                print("--------------------------------------")
+            case "PROMPT":
                 print(event.text)
+                if event.data:
+                    print(
+                        f"1> Protection {event.data['protection']}  2> Fireball {event.data['fireball']}  "
+                        f"3> Lightning {event.data['lightning']}  4> Weaken {event.data['weaken']}  "
+                        f"5> Teleport {event.data['teleport']}"
+                    )
+            case "INFO" | "ERROR" | "COMBAT" | "LOOT":
+                if event.text:
+                    print(event.text)
+            case _:
+                if event.text:
+                    print(event.text)
 
 
 def _prompt_race() -> Race:
