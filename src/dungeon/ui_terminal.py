@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import argparse
 import pickle
 import random
+import sys
 from pathlib import Path
 
 from dungeon.constants import Mode, Race
@@ -10,6 +12,20 @@ from dungeon.types import Event
 
 
 def run() -> None:
+    args = _parse_args()
+    if args.continue_game:
+        game = _load_game(Path("savegame.pkl"))
+        if game is None:
+            print("Unable to load saved game.")
+            return
+        _run_game(game)
+        return
+
+    game = _setup_game()
+    _run_game(game)
+
+
+def _setup_game() -> Game:
     print("Dungeon of Doom")
     print()
     seed = _prompt_int("Seed", default=0)
@@ -51,21 +67,7 @@ def run() -> None:
         flare_count=flare_count,
     )
 
-    game = Game(seed=seed, player=player, rng=rng)
-    print()
-    print("The dungeon awaits you...")
-    _render_events(game.start_events())
-
-    while True:
-        print()
-        command = input(_game_prompt(game))
-        if command.strip().startswith("/"):
-            game = _handle_slash_command(command, game)
-            continue
-        result = game.step(command)
-        _render_events(result.events)
-        if result.mode.name in {"GAME_OVER", "VICTORY"}:
-            break
+    return Game(seed=seed, player=player, rng=rng)
 
 
 def _render_events(events: list[Event]) -> None:
@@ -106,6 +108,23 @@ def _render_events(events: list[Event]) -> None:
                     print(event.text)
 
 
+def _run_game(game: Game) -> None:
+    print()
+    print("The dungeon awaits you...")
+    _render_events(game.start_events())
+
+    while True:
+        print()
+        command = input(_game_prompt(game))
+        if command.strip().startswith("/"):
+            game = _handle_slash_command(command, game)
+            continue
+        result = game.step(command)
+        _render_events(result.events)
+        if result.mode.name in {"GAME_OVER", "VICTORY"}:
+            break
+
+
 def _game_prompt(game: Game) -> str:
     if game.mode == Mode.ENCOUNTER:
         return "F/R/S> "
@@ -139,6 +158,28 @@ def _handle_slash_command(command: str, game: Game) -> Game:
             return game
     print("Unknown command.")
     return game
+
+
+def _load_game(path: Path) -> Game | None:
+    try:
+        with path.open("rb") as handle:
+            return pickle.load(handle)
+    except FileNotFoundError:
+        print(f"Save file not found: {path}.")
+    except OSError as exc:
+        print(f"Load failed: {exc}.")
+    return None
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--continue",
+        dest="continue_game",
+        action="store_true",
+        help="Load savegame.pkl and continue.",
+    )
+    return parser.parse_args(sys.argv[1:])
 
 
 def _prompt_race() -> Race:
