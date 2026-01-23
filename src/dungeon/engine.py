@@ -111,6 +111,8 @@ def create_player(
 
 
 class Game:
+    SIZE = 7
+
     def __init__(self, seed: int, player: Player, rng: random.Random | None = None):
         self.rng = rng or random.Random(seed)
         self.dungeon = generate_dungeon(self.rng)
@@ -262,7 +264,7 @@ class Game:
     def _move(self, dy: int, dx: int) -> list[Event]:
         ny = self.player.y + dy
         nx = self.player.x + dx
-        if ny < 0 or ny > 6 or nx < 0 or nx > 6:
+        if ny not in range(self.SIZE) or nx not in range(self.SIZE):
             return [Event.info("A wall interposes itself.")]
         self.player.y = ny
         self.player.x = nx
@@ -372,7 +374,7 @@ class Game:
                     continue
                 ny = self.player.y + dy
                 nx = self.player.x + dx
-                if 0 <= ny <= 6 and 0 <= nx <= 6:
+                if ny in range(self.SIZE) and nx in range(self.SIZE):
                     self.dungeon.rooms[self.player.z][ny][nx].seen = True
         return [
             Event.info("The flare illuminates nearby rooms."),
@@ -381,9 +383,9 @@ class Game:
 
     def _map_grid(self) -> list[str]:
         grid: list[str] = []
-        for y in range(7):
+        for y in range(self.SIZE):
             row = []
-            for x in range(7):
+            for x in range(self.SIZE):
                 room = self.dungeon.rooms[self.player.z][y][x]
                 if self.player.y == y and self.player.x == x:
                     row.append("*")
@@ -449,9 +451,9 @@ class Game:
             if self.rng.randint(1, 10) <= 5:
                 return [Event.info(self.rng.choice(visions))]
             treasure = self.rng.randint(1, 10)
-            tx = self.rng.randint(1, 7)
-            ty = self.rng.randint(1, 7)
-            tz = self.rng.randint(1, 7)
+            tx = self.rng.randint(1, self.SIZE)
+            ty = self.rng.randint(1, self.SIZE)
+            tz = self.rng.randint(1, self.SIZE)
             return [
                 Event.info(
                     f"You see the {self._treasure_name(treasure)} at {tz},{ty},{tx}!"
@@ -858,10 +860,10 @@ class Game:
 
     def _random_relocate(self, *, any_floor: bool) -> None:
         if any_floor:
-            self.player.z = self.rng.randint(0, 6)
+            self.player.z = self.rng.randrange(self.SIZE)
         while True:
-            ny = self.rng.randint(0, 6)
-            nx = self.rng.randint(0, 6)
+            ny = self.rng.randrange(self.SIZE)
+            nx = self.rng.randrange(self.SIZE)
             if ny == self.player.y and nx == self.player.x:
                 continue
             self.player.y = ny
