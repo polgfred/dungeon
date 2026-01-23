@@ -89,8 +89,8 @@ TREASURE_NAMES = [
 WEAPON_NAMES = ["none", "Dagger", "Short sword", "Broadsword"]
 ARMOR_NAMES = ["none", "Leather", "Wooden", "Chain mail"]
 
-WEAPON_PRICES = {1: 50, 2: 100, 3: 150}
-ARMOR_PRICES = {1: 50, 2: 100, 3: 150}
+WEAPON_PRICES = {1: 10, 2: 20, 3: 30}
+ARMOR_PRICES = {1: 10, 2: 20, 3: 30}
 
 SPELL_PRICES = {
     Spell.PROTECTION: 50,

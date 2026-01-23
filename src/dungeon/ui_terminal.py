@@ -121,13 +121,13 @@ def _prompt_purchase(kind: str, gold: int) -> int:
     while True:
         print(f"You have {gold} gold pieces.")
         if kind == "weapon":
-            print("  1> Dagger 50")
-            print("  2> Short sword 100")
-            print("  3> Broadsword 150")
+            print("  1> Dagger 10")
+            print("  2> Short sword 20")
+            print("  3> Broadsword 30")
         else:
-            print("  1> Leather 50")
-            print("  2> Wooden 100")
-            print("  3> Chain mail 150")
+            print("  1> Leather 10")
+            print("  2> Wooden 20")
+            print("  3> Chain mail 30")
         choice = input(f"Which {label}? ").strip()
         if choice not in {"1", "2", "3"}:
             print("I don't understand that.")
@@ -141,11 +141,11 @@ def _prompt_purchase(kind: str, gold: int) -> int:
 
 
 def _price_weapon(tier: int) -> int:
-    return {1: 50, 2: 100, 3: 150}[tier]
+    return {1: 10, 2: 20, 3: 30}[tier]
 
 
 def _price_armor(tier: int) -> int:
-    return {1: 50, 2: 100, 3: 150}[tier]
+    return {1: 10, 2: 20, 3: 30}[tier]
 
 
 def _prompt_int(
