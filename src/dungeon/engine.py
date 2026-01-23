@@ -128,7 +128,7 @@ class Game:
         raw = command.strip().upper()
         if not raw:
             return StepResult(
-                events=[Event("ERROR", "I don't understand that.")],
+                events=[Event.error("I don't understand that.")],
                 mode=self.mode,
                 needs_input=True,
             )
@@ -149,7 +149,7 @@ class Game:
         if self.mode == Mode.EXPLORE:
             if key not in EXPLORE_COMMANDS:
                 return StepResult(
-                    events=[Event("ERROR", "I don't understand that.")],
+                    events=[Event.error("I don't understand that.")],
                     mode=self.mode,
                     needs_input=True,
                 )
@@ -157,7 +157,7 @@ class Game:
         elif self.mode == Mode.ENCOUNTER:
             if key not in ENCOUNTER_COMMANDS:
                 return StepResult(
-                    events=[Event("ERROR", "I don't understand that.")],
+                    events=[Event.error("I don't understand that.")],
                     mode=self.mode,
                     needs_input=True,
                 )
@@ -184,7 +184,7 @@ class Game:
             case "D":
                 events.extend(self._stairs(up=False))
             case "M":
-                events.append(Event("MAP", "", data={"grid": self._map_grid()}))
+                events.append(Event.map(self._map_grid()))
             case "F":
                 events.extend(self._use_flare())
             case "X":
@@ -200,29 +200,29 @@ class Game:
             case "B":
                 events.extend(self._open_vendor())
             case "T":
-                events.append(Event("STATUS", "", data=self._status_data()))
+                events.append(Event.status(self._status_data()))
             case "H":
-                events.append(Event("INFO", self._help_text()))
+                events.append(Event.info(self._help_text()))
         return events
 
     def _handle_encounter(self, key: str) -> list[Event]:
         if self.encounter is None:
             self.mode = Mode.EXPLORE
-            return [Event("ERROR", "There is nothing to fight.")]
+            return [Event.error("There is nothing to fight.")]
         if key == "F":
             return self._fight_round()
         if key == "R":
             return self._run_attempt()
         if key == "S":
             self._awaiting_spell = True
-            return [Event("PROMPT", "Choose a spell:", data=self._spell_menu())]
+            return [Event.prompt("Choose a spell:", data=self._spell_menu())]
         return []
 
     def _move(self, dy: int, dx: int) -> list[Event]:
         ny = self.player.y + dy
         nx = self.player.x + dx
         if ny < 0 or ny > 6 or nx < 0 or nx > 6:
-            return [Event("INFO", "A wall interposes itself.")]
+            return [Event.info("A wall interposes itself.")]
         self.player.y = ny
         self.player.x = nx
         return self._enter_room()
@@ -232,15 +232,14 @@ class Game:
         if up:
             if room.feature != Feature.STAIRS_UP:
                 return [
-                    Event(
-                        "INFO",
-                        "There are no stairs leading up here, foolish adventurer.",
+                    Event.info(
+                        "There are no stairs leading up here, foolish adventurer."
                     )
                 ]
             self.player.z += 1
             return self._enter_room()
         if room.feature != Feature.STAIRS_DOWN:
-            return [Event("INFO", "There is no downward staircase here.")]
+            return [Event.info("There is no downward staircase here.")]
         self.player.z -= 1
         return self._enter_room()
 
@@ -253,10 +252,7 @@ class Game:
             self._start_encounter(room.monster_level)
             assert self.encounter is not None
             events.append(
-                Event(
-                    "COMBAT",
-                    f"You are facing an angry {self.encounter.monster_name}!",
-                )
+                Event.combat(f"You are facing an angry {self.encounter.monster_name}!")
             )
             self.mode = Mode.ENCOUNTER
             return events
@@ -268,67 +264,65 @@ class Game:
         match room.feature:
             case Feature.MIRROR:
                 events.append(
-                    Event("INFO", "There is a magic mirror mounted on the wall here.")
+                    Event.info("There is a magic mirror mounted on the wall here.")
                 )
             case Feature.SCROLL:
-                events.append(Event("INFO", "There is a spell scroll here."))
+                events.append(Event.info("There is a spell scroll here."))
             case Feature.CHEST:
-                events.append(Event("INFO", "There is a chest here."))
+                events.append(Event.info("There is a chest here."))
             case Feature.FLARES:
                 gained = self.rng.randint(1, 5)
                 self.player.flares += gained
                 room.feature = Feature.EMPTY
-                events.append(Event("INFO", f"You pick up {gained} flares."))
+                events.append(Event.info(f"You pick up {gained} flares."))
             case Feature.POTION:
-                events.append(Event("INFO", "There is a magic potion here."))
+                events.append(Event.info("There is a magic potion here."))
             case Feature.VENDOR:
-                events.append(Event("INFO", "There is a vendor here."))
+                events.append(Event.info("There is a vendor here."))
             case Feature.THIEF:
                 stolen = min(self.rng.randint(1, 50), self.player.gold)
                 self.player.gold -= stolen
                 room.feature = Feature.EMPTY
-                events.append(Event("INFO", f"A thief steals {stolen} gold pieces."))
+                events.append(Event.info(f"A thief steals {stolen} gold pieces."))
             case Feature.WARP:
                 events.append(
-                    Event(
-                        "INFO",
-                        "This room contains a warp. You are whisked elsewhere...",
+                    Event.info(
+                        "This room contains a warp. You are whisked elsewhere..."
                     )
                 )
                 self._random_relocate(any_floor=True)
                 events.extend(self._enter_room())
             case Feature.STAIRS_UP:
-                events.append(Event("INFO", "There are stairs up here."))
+                events.append(Event.info("There are stairs up here."))
             case Feature.STAIRS_DOWN:
-                events.append(Event("INFO", "There are stairs down here."))
+                events.append(Event.info("There are stairs down here."))
             case Feature.EXIT:
                 events.append(
-                    Event("INFO", "You see the exit to the Dungeon of Doom here.")
+                    Event.info("You see the exit to the Dungeon of Doom here.")
                 )
             case _:
-                events.append(Event("INFO", "This room is empty."))
+                events.append(Event.info("This room is empty."))
 
         return events
 
     def _attempt_exit(self) -> list[Event]:
         room = self._current_room()
         if room.feature != Feature.EXIT:
-            return [Event("INFO", "There is no exit here.")]
+            return [Event.info("There is no exit here.")]
         if len(self.player.treasures_found) < 10:
             self.mode = Mode.GAME_OVER
             remaining = 10 - len(self.player.treasures_found)
             return [
-                Event(
-                    "INFO",
-                    f"You abandon your quest with {remaining} treasures remaining.",
+                Event.info(
+                    f"You abandon your quest with {remaining} treasures remaining."
                 )
             ]
         self.mode = Mode.VICTORY
-        return [Event("INFO", "ALL HAIL THE VICTOR!")]
+        return [Event.info("ALL HAIL THE VICTOR!")]
 
     def _use_flare(self) -> list[Event]:
         if self.player.flares < 1:
-            return [Event("INFO", "Thou hast no flares.")]
+            return [Event.info("Thou hast no flares.")]
         self.player.flares -= 1
         for dy in (-1, 0, 1):
             for dx in (-1, 0, 1):
@@ -338,7 +332,7 @@ class Game:
                 nx = self.player.x + dx
                 if 0 <= ny <= 6 and 0 <= nx <= 6:
                     self.dungeon.rooms[self.player.z][ny][nx].seen = True
-        return [Event("INFO", "The flare illuminates nearby rooms.")]
+        return [Event.info("The flare illuminates nearby rooms.")]
 
     def _map_grid(self) -> list[str]:
         grid: list[str] = []
@@ -393,7 +387,7 @@ class Game:
     def _use_mirror(self) -> list[Event]:
         room = self._current_room()
         if room.feature != Feature.MIRROR:
-            return [Event("INFO", "There is no mirror here.")]
+            return [Event.info("There is no mirror here.")]
         if self.rng.randint(1, 50) > self.player.iq:
             visions = [
                 "The mirror is cloudy and yields no vision.",
@@ -403,58 +397,56 @@ class Game:
                 "You see the exit on the 7th floor, big and friendly-looking.",
             ]
             if self.rng.randint(1, 10) <= 5:
-                return [Event("INFO", self.rng.choice(visions))]
+                return [Event.info(self.rng.choice(visions))]
             treasure = self.rng.randint(1, 10)
             tx = self.rng.randint(1, 7)
             ty = self.rng.randint(1, 7)
             return [
-                Event(
-                    "INFO", f"You see the {self._treasure_name(treasure)} at {tx},{ty}!"
-                )
+                Event.info(f"You see the {self._treasure_name(treasure)} at {tx},{ty}!")
             ]
 
         treasure = self.rng.randint(1, 10)
         tx = self.rng.randint(1, 7)
         ty = self.rng.randint(1, 7)
         return [
-            Event("INFO", f"You see the {self._treasure_name(treasure)} at {tx},{ty}!")
+            Event.info(f"You see the {self._treasure_name(treasure)} at {tx},{ty}!")
         ]
 
     def _open_chest(self) -> list[Event]:
         room = self._current_room()
         if room.feature != Feature.CHEST:
-            return [Event("INFO", "There is no chest here.")]
+            return [Event.info("There is no chest here.")]
         room.feature = Feature.EMPTY
         roll = self.rng.randint(1, 5)
         if roll == 1:
             self.player.armor_tier = max(0, self.player.armor_tier - 1)
             self.player.armor_name = ARMOR_NAMES[self.player.armor_tier]
-            return [Event("INFO", "The perverse thing explodes, damaging your armor!")]
+            return [Event.info("The perverse thing explodes, damaging your armor!")]
         if roll == 2:
-            return [Event("INFO", "It containeth naught.")]
+            return [Event.info("It containeth naught.")]
         gold = 10 + self.rng.randint(0, 20)
         self.player.gold += gold
-        return [Event("INFO", f"You find {gold} gold pieces!")]
+        return [Event.info(f"You find {gold} gold pieces!")]
 
     def _read_scroll(self) -> list[Event]:
         room = self._current_room()
         if room.feature != Feature.SCROLL:
-            return [Event("INFO", "Sorry. There is nothing to read here.")]
+            return [Event.info("Sorry. There is nothing to read here.")]
         room.feature = Feature.EMPTY
         spell = Spell(self.rng.randint(1, 5))
         self.player.spells[spell] = self.player.spells.get(spell, 0) + 1
-        return [Event("INFO", f"The scroll contains the {spell.name.lower()} spell.")]
+        return [Event.info(f"The scroll contains the {spell.name.lower()} spell.")]
 
     def _drink_potion(self) -> list[Event]:
         room = self._current_room()
         if room.feature != Feature.POTION:
-            return [Event("INFO", "There is no potion here, I fear.")]
+            return [Event.info("There is no potion here, I fear.")]
         room.feature = Feature.EMPTY
         roll = self.rng.randint(1, 5)
         if roll == 1:
             heal = 5 + self.rng.randint(1, 10)
             self.player.hp = min(self.player.mhp, self.player.hp + heal)
-            return [Event("INFO", "You drink the potion... healing results.")]
+            return [Event.info("You drink the potion... healing results.")]
 
         change = self.rng.randint(1, 6)
         effect = self.rng.choice(
@@ -467,19 +459,16 @@ class Game:
         )
         self._apply_attribute_change(effect, change, randomize=True)
         return [
-            Event("INFO", "You drink the potion... strange energies surge through you.")
+            Event.info("You drink the potion... strange energies surge through you.")
         ]
 
     def _open_vendor(self) -> list[Event]:
         room = self._current_room()
         if room.feature != Feature.VENDOR:
-            return [Event("INFO", "There is no vendor here.")]
+            return [Event.info("There is no vendor here.")]
         self._shop_state = _ShopState(phase="category")
         return [
-            Event(
-                "PROMPT",
-                "He is selling: 1> Weapons  2> Armour  3> Scrolls  4> Potions",
-            )
+            Event.prompt("He is selling: 1> Weapons  2> Armour  3> Scrolls  4> Potions")
         ]
 
     def _handle_shop(self, raw: str) -> list[Event]:
@@ -490,34 +479,29 @@ class Game:
 
         if state.phase == "category":
             if raw not in {"1", "2", "3", "4"}:
-                return [Event("ERROR", "Choose 1..4.")]
+                return [Event.error("Choose 1..4.")]
             state.category = raw
             state.phase = "item"
             match raw:
                 case "1":
                     events.append(
-                        Event(
-                            "PROMPT",
-                            "Weapons: 1> Dagger  2> Short sword  3> Broadsword",
+                        Event.prompt(
+                            "Weapons: 1> Dagger  2> Short sword  3> Broadsword"
                         )
                     )
                 case "2":
                     events.append(
-                        Event(
-                            "PROMPT",
-                            "Armour: 1> Leather  2> Wooden  3> Chain mail",
-                        )
+                        Event.prompt("Armour: 1> Leather  2> Wooden  3> Chain mail")
                     )
                 case "3":
                     events.append(
-                        Event(
-                            "PROMPT",
-                            "Scrolls: 1> Protection  2> Fireball  3> Lightning  4> Weaken  5> Teleport",
+                        Event.prompt(
+                            "Scrolls: 1> Protection  2> Fireball  3> Lightning  4> Weaken  5> Teleport"
                         )
                     )
                 case _:
                     events.append(
-                        Event("PROMPT", "Potions: 1> Healing  2> Attribute enhancer")
+                        Event.prompt("Potions: 1> Healing  2> Attribute enhancer")
                     )
             return events
 
@@ -525,88 +509,81 @@ class Game:
             match state.category:
                 case "1":
                     if raw not in {"1", "2", "3"}:
-                        return [Event("ERROR", "Choose 1..3.")]
+                        return [Event.error("Choose 1..3.")]
                     tier = int(raw)
                     price = WEAPON_PRICES[tier]
                     if self.player.gold < price:
-                        return [Event("INFO", "Don't try to cheat me. It won't work!")]
+                        return [Event.info("Don't try to cheat me. It won't work!")]
                     if tier > self.player.weapon_tier:
                         self.player.weapon_tier = tier
                         self.player.weapon_name = WEAPON_NAMES[tier]
                     self.player.gold -= price
                     self._shop_state = None
-                    return [Event("INFO", "A fine weapon for your quest.")]
+                    return [Event.info("A fine weapon for your quest.")]
                 case "2":
                     if raw not in {"1", "2", "3"}:
-                        return [Event("ERROR", "Choose 1..3.")]
+                        return [Event.error("Choose 1..3.")]
                     tier = int(raw)
                     price = ARMOR_PRICES[tier]
                     if self.player.gold < price:
-                        return [Event("INFO", "Don't try to cheat me. It won't work!")]
+                        return [Event.info("Don't try to cheat me. It won't work!")]
                     if tier > self.player.armor_tier:
                         self.player.armor_tier = tier
                         self.player.armor_name = ARMOR_NAMES[tier]
                     self.player.gold -= price
                     self._shop_state = None
-                    return [Event("INFO", "Armor fitted and ready.")]
+                    return [Event.info("Armor fitted and ready.")]
                 case "3":
                     if raw not in {"1", "2", "3", "4", "5"}:
-                        return [Event("ERROR", "Choose 1..5.")]
+                        return [Event.error("Choose 1..5.")]
                     spell = Spell(int(raw))
                     price = SPELL_PRICES[spell]
                     if self.player.gold < price:
-                        return [Event("INFO", "Don't try to cheat me. It won't work!")]
+                        return [Event.info("Don't try to cheat me. It won't work!")]
                     self.player.gold -= price
                     self.player.spells[spell] = self.player.spells.get(spell, 0) + 1
                     self._shop_state = None
-                    return [Event("INFO", "A scroll is yours.")]
+                    return [Event.info("A scroll is yours.")]
                 case "4":
                     if raw not in {"1", "2"}:
-                        return [Event("ERROR", "Choose 1 or 2.")]
+                        return [Event.error("Choose 1 or 2.")]
                     match raw:
                         case "1":
                             price = POTION_PRICES["HEALING"]
                             if self.player.gold < price:
                                 return [
-                                    Event(
-                                        "INFO",
-                                        "Don't try to cheat me. It won't work!",
-                                    )
+                                    Event.info("Don't try to cheat me. It won't work!")
                                 ]
                             self.player.gold -= price
                             self.player.hp = min(self.player.mhp, self.player.hp + 10)
                             self._shop_state = None
-                            return [Event("INFO", "You quaff a healing potion.")]
+                            return [Event.info("You quaff a healing potion.")]
                         case _:
                             price = POTION_PRICES["ATTRIBUTE"]
                             if self.player.gold < price:
                                 return [
-                                    Event(
-                                        "INFO",
-                                        "Don't try to cheat me. It won't work!",
-                                    )
+                                    Event.info("Don't try to cheat me. It won't work!")
                                 ]
                             state.phase = "attribute"
                             return [
-                                Event(
-                                    "PROMPT",
-                                    "Attribute enhancer: 1> Strength  2> Dexterity  3> Intelligence  4> Max HP",
+                                Event.prompt(
+                                    "Attribute enhancer: 1> Strength  2> Dexterity  3> Intelligence  4> Max HP"
                                 )
                             ]
 
         if state.phase == "attribute":
             if raw not in {"1", "2", "3", "4"}:
-                return [Event("ERROR", "Choose 1..4.")]
+                return [Event.error("Choose 1..4.")]
             price = POTION_PRICES["ATTRIBUTE"]
             if self.player.gold < price:
                 self._shop_state = None
-                return [Event("INFO", "Don't try to cheat me. It won't work!")]
+                return [Event.info("Don't try to cheat me. It won't work!")]
             self.player.gold -= price
             change = self.rng.randint(1, 6)
             targets = {"1": "STR", "2": "DEX", "3": "IQ", "4": "MHP"}
             self._apply_attribute_change(targets[raw], change, randomize=False)
             self._shop_state = None
-            return [Event("INFO", "The potion takes effect.")]
+            return [Event.info("The potion takes effect.")]
 
         return events
 
@@ -645,7 +622,7 @@ class Game:
         roll = self.rng.randint(1, 100)
         if roll > attack_score:
             events.append(
-                Event("COMBAT", f"The {self.encounter.monster_name} evades your blow!")
+                Event.combat(f"The {self.encounter.monster_name} evades your blow!")
             )
         else:
             damage = max(
@@ -656,16 +633,14 @@ class Game:
                 1,
             )
             self.encounter.vitality -= damage
-            events.append(
-                Event("COMBAT", f"You hit the {self.encounter.monster_name}!")
-            )
+            events.append(Event.combat(f"You hit the {self.encounter.monster_name}!"))
             if self.encounter.vitality <= 0:
                 events.extend(self._handle_monster_death())
                 return events
             if self.rng.random() < 0.05 and self.player.weapon_tier > 0:
                 self.player.weapon_tier = 0
                 self.player.weapon_name = "~~broken"
-                events.append(Event("INFO", "Your weapon breaks with the impact!"))
+                events.append(Event.info("Your weapon breaks with the impact!"))
 
         events.extend(self._monster_attack())
         return events
@@ -673,11 +648,9 @@ class Game:
     def _run_attempt(self) -> list[Event]:
         assert self.encounter is not None
         if self.player.fatigued:
-            return [
-                Event("INFO", "You are quite fatigued after your previous efforts.")
-            ]
+            return [Event.info("You are quite fatigued after your previous efforts.")]
         if self.rng.random() < 0.4:
-            events = [Event("INFO", "You slip away and the monster no longer follows.")]
+            events = [Event.info("You slip away and the monster no longer follows.")]
             self.encounter = None
             self.mode = Mode.EXPLORE
             self._random_relocate(any_floor=False)
@@ -686,9 +659,8 @@ class Game:
 
         self.player.fatigued = True
         return [
-            Event(
-                "INFO",
-                "Although you run your hardest, your efforts to escape are made in vain.",
+            Event.info(
+                "Although you run your hardest, your efforts to escape are made in vain."
             )
         ]
 
@@ -699,24 +671,24 @@ class Game:
         dodge_score = 20 + 5 * (11 - level) + 2 * self.player.dex
         roll = self.rng.randint(1, 100)
         if roll <= dodge_score:
-            events.append(Event("COMBAT", "You deftly dodge the blow!"))
+            events.append(Event.combat("You deftly dodge the blow!"))
             return events
 
         armor = self.player.armor_tier + self.player.temp_armor_bonus
         damage = max(self.rng.randint(0, level - 1) + 3 - armor, 0)
         self.player.hp -= damage
-        events.append(Event("COMBAT", f"The {self.encounter.monster_name} hits you!"))
+        events.append(Event.combat(f"The {self.encounter.monster_name} hits you!"))
         if self.player.hp <= 0:
             self.mode = Mode.GAME_OVER
-            events.append(Event("INFO", "YOU HAVE DIED."))
+            events.append(Event.info("YOU HAVE DIED."))
         return events
 
     def _handle_monster_death(self) -> list[Event]:
         assert self.encounter is not None
-        events = [Event("COMBAT", f"The foul {self.encounter.monster_name} expires.")]
+        events = [Event.combat(f"The foul {self.encounter.monster_name} expires.")]
         if self.rng.random() > 0.7:
             events.append(
-                Event("COMBAT", "As it dies, it launches one final desperate attack.")
+                Event.combat("As it dies, it launches one final desperate attack.")
             )
             events.extend(self._monster_attack())
 
@@ -727,7 +699,7 @@ class Game:
         else:
             gold = 5 * self.encounter.monster_level + self.rng.randint(0, 20)
             self.player.gold += gold
-            events.append(Event("LOOT", f"You found {gold} gold pieces."))
+            events.append(Event.loot(f"You found {gold} gold pieces."))
 
         room.monster_level = 0
         self.encounter = None
@@ -737,13 +709,13 @@ class Game:
     def _handle_spell_choice(self, raw: str) -> list[Event]:
         self._awaiting_spell = False
         if raw not in {"1", "2", "3", "4", "5"}:
-            return [Event("ERROR", "Choose 1..5.")]
+            return [Event.error("Choose 1..5.")]
         spell = Spell(int(raw))
         charges = self.player.spells.get(spell, 0)
         if self.player.iq < 12:
-            return [Event("INFO", "You have insufficient intelligence.")]
+            return [Event.info("You have insufficient intelligence.")]
         if charges <= 0:
-            return [Event("INFO", "You know not that spell.")]
+            return [Event.info("You know not that spell.")]
 
         self.player.spells[spell] = charges - 1
         return self._cast_spell(spell)
@@ -764,10 +736,7 @@ class Game:
             case Spell.PROTECTION:
                 self.player.temp_armor_bonus += 3
                 events.append(
-                    Event(
-                        "INFO",
-                        "Your armor glows briefly in response to your spell.",
-                    )
+                    Event.info("Your armor glows briefly in response to your spell.")
                 )
                 events.extend(self._monster_attack())
                 return events
@@ -775,28 +744,23 @@ class Game:
                 damage = max(self.rng.randint(1, 5) - (self.player.iq // 3), 0)
                 self.encounter.vitality -= damage
                 events.append(
-                    Event(
-                        "COMBAT",
-                        f"A ball of fire scorches the {self.encounter.monster_name}.",
+                    Event.combat(
+                        f"A ball of fire scorches the {self.encounter.monster_name}."
                     )
                 )
             case Spell.LIGHTNING:
                 damage = max(self.rng.randint(1, 10) - (self.player.iq // 2), 0)
                 self.encounter.vitality -= damage
                 events.append(
-                    Event(
-                        "COMBAT",
-                        f"The {self.encounter.monster_name} is thunderstruck!",
-                    )
+                    Event.combat(f"The {self.encounter.monster_name} is thunderstruck!")
                 )
             case Spell.WEAKEN:
                 self.encounter.vitality = self.encounter.vitality // 2
-                events.append(Event("COMBAT", "A green mist envelops your foe."))
+                events.append(Event.combat("A green mist envelops your foe."))
             case Spell.TELEPORT:
                 events.append(
-                    Event(
-                        "INFO",
-                        "Thy surroundings vibrate as you are transported elsewhere...",
+                    Event.info(
+                        "Thy surroundings vibrate as you are transported elsewhere..."
                     )
                 )
                 self.encounter = None
@@ -828,7 +792,7 @@ class Game:
         if treasure_id in self.player.treasures_found:
             return []
         self.player.treasures_found.add(treasure_id)
-        return [Event("LOOT", f"You find the {self._treasure_name(treasure_id)}!")]
+        return [Event.loot(f"You find the {self._treasure_name(treasure_id)}!")]
 
     def _treasure_name(self, treasure_id: int) -> str:
         return TREASURE_NAMES[treasure_id - 1]

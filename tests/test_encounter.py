@@ -1,6 +1,6 @@
 import random
 
-from dungeon.constants import Race
+from dungeon.constants import Feature, Race
 from dungeon.engine import Game, create_player
 from dungeon.model import Encounter
 from dungeon.constants import Mode
@@ -25,6 +25,16 @@ def test_run_success_relocates():
     game.encounter = Encounter(monster_level=1, monster_name="Skeleton", vitality=5)
     game.mode = Mode.ENCOUNTER
     start = (game.player.z, game.player.y, game.player.x)
+    target = (0, 0, 0)
+    target_room = game.dungeon.rooms[target[0]][target[1]][target[2]]
+    target_room.monster_level = 0
+    target_room.treasure_id = 0
+    target_room.feature = Feature.EMPTY
+    def _relocate(*_, **__) -> None:
+        game.player.z, game.player.y, game.player.x = target
+
+    game.rng.random = lambda: 0.0
+    game._random_relocate = _relocate
     events = game._run_attempt()
     assert game.mode == game.mode.EXPLORE
     assert (game.player.z, game.player.y, game.player.x) != start

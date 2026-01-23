@@ -27,6 +27,7 @@ def test_vendor_entry_no_prompt():
     game = _make_game(4)
     room = game._current_room()
     room.feature = Feature.VENDOR
+    room.monster_level = 0
     events = game._enter_room()
     assert game._shop_state is None
     assert any("vendor" in e.text.lower() for e in events)
