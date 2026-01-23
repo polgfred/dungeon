@@ -182,6 +182,9 @@ class Game:
             needs_input=True,
         )
 
+    def prompt(self) -> str:
+        return self._next_prompt([])
+
     def _next_prompt(self, events: list[Event]) -> str:
         if any(event.kind == "PROMPT" for event in events):
             return "?> "
@@ -200,9 +203,6 @@ class Game:
             )
             events.insert(1, Event.info("Encounter mode: F=Fight  R=Run  S=Spell"))
         return events
-
-    def prompt(self) -> str:
-        return self._next_prompt([])
 
     def _current_room(self):
         return self.dungeon.rooms[self.player.z][self.player.y][self.player.x]
