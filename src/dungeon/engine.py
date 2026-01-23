@@ -731,13 +731,13 @@ class Game:
             self._random_relocate(any_floor=False)
             events.extend(self._enter_room())
             return events
-
-        self.player.fatigued = True
-        return [
-            Event.info(
-                "Although you run your hardest, your efforts to escape are made in vain."
-            )
-        ]
+        else:
+            self.player.fatigued = True
+            return [
+                Event.info(
+                    "Although you run your hardest, your efforts to escape are made in vain."
+                )
+            ]
 
     def _monster_attack(self) -> list[Event]:
         assert self.encounter is not None
