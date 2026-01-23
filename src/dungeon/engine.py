@@ -131,39 +131,72 @@ class Game:
                 events=[Event.error("I don't understand that.")],
                 mode=self.mode,
                 needs_input=True,
+                prompt=self._next_prompt([]),
             )
 
         if self.mode in {Mode.GAME_OVER, Mode.VICTORY}:
-            return StepResult(events=[], mode=self.mode, needs_input=False)
+            return StepResult(
+                events=[],
+                mode=self.mode,
+                needs_input=False,
+                prompt=None,
+            )
 
         if self._shop_state is not None:
             events.extend(self._handle_shop(raw))
-            return StepResult(events=events, mode=self.mode, needs_input=True)
+            return StepResult(
+                events=events,
+                mode=self.mode,
+                needs_input=True,
+                prompt=self._next_prompt(events),
+            )
 
         if self._awaiting_spell:
             events.extend(self._handle_spell_choice(raw))
-            return StepResult(events=events, mode=self.mode, needs_input=True)
+            return StepResult(
+                events=events,
+                mode=self.mode,
+                needs_input=True,
+                prompt=self._next_prompt(events),
+            )
 
         key = raw[0]
 
-        if self.mode == Mode.EXPLORE:
-            if key not in EXPLORE_COMMANDS:
-                return StepResult(
-                    events=[Event.error("I don't understand that.")],
-                    mode=self.mode,
-                    needs_input=True,
-                )
-            events.extend(self._handle_explore(key))
-        elif self.mode == Mode.ENCOUNTER:
-            if key not in ENCOUNTER_COMMANDS:
-                return StepResult(
-                    events=[Event.error("I don't understand that.")],
-                    mode=self.mode,
-                    needs_input=True,
-                )
-            events.extend(self._handle_encounter(key))
+        match self.mode:
+            case Mode.EXPLORE:
+                if key not in EXPLORE_COMMANDS:
+                    return StepResult(
+                        events=[Event.error("I don't understand that.")],
+                        mode=self.mode,
+                        needs_input=True,
+                        prompt=self._next_prompt([]),
+                    )
+                events.extend(self._handle_explore(key))
+            case Mode.ENCOUNTER:
+                if key not in ENCOUNTER_COMMANDS:
+                    return StepResult(
+                        events=[Event.error("I don't understand that.")],
+                        mode=self.mode,
+                        needs_input=True,
+                        prompt=self._next_prompt([]),
+                    )
+                events.extend(self._handle_encounter(key))
 
-        return StepResult(events=events, mode=self.mode, needs_input=True)
+        return StepResult(
+            events=events,
+            mode=self.mode,
+            needs_input=True,
+            prompt=self._next_prompt(events),
+        )
+
+    def _next_prompt(self, events: list[Event]) -> str:
+        if any(event.kind == "PROMPT" for event in events):
+            return "?> "
+        if self._shop_state is not None or self._awaiting_spell:
+            return "?> "
+        if self.mode == Mode.ENCOUNTER:
+            return "F/R/S> "
+        return "--> "
 
     def _current_room(self):
         return self.dungeon.rooms[self.player.z][self.player.y][self.player.x]
@@ -482,124 +515,148 @@ class Game:
             return [Event.info("There is no vendor here.")]
         self._shop_state = _ShopState(phase="category")
         return [
-            Event.prompt("He is selling: 1> Weapons  2> Armour  3> Scrolls  4> Potions")
+            Event.prompt(
+                "He is selling: 1> Weapons  2> Armour  3> Scrolls  4> Potions  0> Leave"
+            )
         ]
 
     def _handle_shop(self, raw: str) -> list[Event]:
         if self._shop_state is None:
             return []
         state = self._shop_state
-        events: list[Event] = []
+        match state.phase:
+            case "category":
+                return self._handle_shop_category(raw)
+            case "item":
+                return self._handle_shop_item(raw)
+            case "attribute":
+                return self._handle_shop_attribute(raw)
+            case _:
+                return []
 
-        if state.phase == "category":
-            if raw not in {"1", "2", "3", "4"}:
-                return [Event.error("Choose 1..4.")]
-            state.category = raw
-            state.phase = "item"
-            match raw:
-                case "1":
-                    events.append(
-                        Event.prompt(
-                            "Weapons: 1> Dagger  2> Short sword  3> Broadsword"
-                        )
-                    )
-                case "2":
-                    events.append(
-                        Event.prompt("Armour: 1> Leather  2> Wooden  3> Chain mail")
-                    )
-                case "3":
-                    events.append(
-                        Event.prompt(
-                            "Scrolls: 1> Protection  2> Fireball  3> Lightning  4> Weaken  5> Teleport"
-                        )
-                    )
-                case _:
-                    events.append(
-                        Event.prompt("Potions: 1> Healing  2> Attribute enhancer")
-                    )
-            return events
-
-        if state.phase == "item":
-            match state.category:
-                case "1":
-                    if raw not in {"1", "2", "3"}:
-                        return [Event.error("Choose 1..3.")]
-                    tier = int(raw)
-                    price = WEAPON_PRICES[tier]
-                    if self.player.gold < price:
-                        return [Event.info("Don't try to cheat me. It won't work!")]
-                    if tier > self.player.weapon_tier:
-                        self.player.weapon_tier = tier
-                        self.player.weapon_name = WEAPON_NAMES[tier]
-                    self.player.gold -= price
-                    self._shop_state = None
-                    return [Event.info("A fine weapon for your quest.")]
-                case "2":
-                    if raw not in {"1", "2", "3"}:
-                        return [Event.error("Choose 1..3.")]
-                    tier = int(raw)
-                    price = ARMOR_PRICES[tier]
-                    if self.player.gold < price:
-                        return [Event.info("Don't try to cheat me. It won't work!")]
-                    if tier > self.player.armor_tier:
-                        self.player.armor_tier = tier
-                        self.player.armor_name = ARMOR_NAMES[tier]
-                    self.player.gold -= price
-                    self._shop_state = None
-                    return [Event.info("Armor fitted and ready.")]
-                case "3":
-                    if raw not in {"1", "2", "3", "4", "5"}:
-                        return [Event.error("Choose 1..5.")]
-                    spell = Spell(int(raw))
-                    price = SPELL_PRICES[spell]
-                    if self.player.gold < price:
-                        return [Event.info("Don't try to cheat me. It won't work!")]
-                    self.player.gold -= price
-                    self.player.spells[spell] = self.player.spells.get(spell, 0) + 1
-                    self._shop_state = None
-                    return [Event.info("A scroll is yours.")]
-                case "4":
-                    if raw not in {"1", "2"}:
-                        return [Event.error("Choose 1 or 2.")]
-                    match raw:
-                        case "1":
-                            price = POTION_PRICES["HEALING"]
-                            if self.player.gold < price:
-                                return [
-                                    Event.info("Don't try to cheat me. It won't work!")
-                                ]
-                            self.player.gold -= price
-                            self.player.hp = min(self.player.mhp, self.player.hp + 10)
-                            self._shop_state = None
-                            return [Event.info("You quaff a healing potion.")]
-                        case _:
-                            price = POTION_PRICES["ATTRIBUTE"]
-                            if self.player.gold < price:
-                                return [
-                                    Event.info("Don't try to cheat me. It won't work!")
-                                ]
-                            state.phase = "attribute"
-                            return [
-                                Event.prompt(
-                                    "Attribute enhancer: 1> Strength  2> Dexterity  3> Intelligence  4> Max HP"
-                                )
-                            ]
-
-        if state.phase == "attribute":
-            if raw not in {"1", "2", "3", "4"}:
-                return [Event.error("Choose 1..4.")]
-            price = POTION_PRICES["ATTRIBUTE"]
-            if self.player.gold < price:
+    def _handle_shop_category(self, raw: str) -> list[Event]:
+        assert self._shop_state is not None
+        state = self._shop_state
+        prompt_map = {
+            "1": "Weapons: 1> Dagger  2> Short sword  3> Broadsword  0> Leave",
+            "2": "Armour: 1> Leather  2> Wooden  3> Chain mail  0> Leave",
+            "3": "Scrolls: 1> Protection  2> Fireball  3> Lightning  4> Weaken  5> Teleport  0> Leave",
+            "4": "Potions: 1> Healing  2> Attribute enhancer  0> Leave",
+        }
+        match raw:
+            case "0":
                 self._shop_state = None
+                return [Event.info("Perhaps another time.")]
+            case "1" | "2" | "3" | "4":
+                state.category = raw
+                state.phase = "item"
+                return [Event.prompt(prompt_map[raw])]
+            case _:
+                return [Event.error("Choose 1..4.")]
+
+    def _handle_shop_item(self, raw: str) -> list[Event]:
+        match raw:
+            case "0":
+                self._shop_state = None
+                return [Event.info("Perhaps another time.")]
+            case "1" | "2" | "3" | "4" | "5":
+                return self._handle_shop_item_choice(raw)
+            case _:
+                return [Event.error("Choose 1..5.")]
+
+    def _handle_shop_item_choice(self, raw: str) -> list[Event]:
+        assert self._shop_state is not None
+        state = self._shop_state
+        match state.category:
+            case "1":
+                return self._handle_shop_weapons(raw)
+            case "2":
+                return self._handle_shop_armor(raw)
+            case "3":
+                return self._handle_shop_scrolls(raw)
+            case "4":
+                return self._handle_shop_potions(raw)
+            case _:
+                return [Event.error("Choose 1..4.")]
+
+    def _handle_shop_weapons(self, raw: str) -> list[Event]:
+        if raw not in {"1", "2", "3"}:
+            return [Event.error("Choose 1..3.")]
+        tier = int(raw)
+        price = WEAPON_PRICES[tier]
+        if self.player.gold < price:
+            return [Event.info("Don't try to cheat me. It won't work!")]
+        if tier > self.player.weapon_tier:
+            self.player.weapon_tier = tier
+            self.player.weapon_name = WEAPON_NAMES[tier]
+        self.player.gold -= price
+        self._shop_state = None
+        return [Event.info("A fine weapon for your quest.")]
+
+    def _handle_shop_armor(self, raw: str) -> list[Event]:
+        if raw not in {"1", "2", "3"}:
+            return [Event.error("Choose 1..3.")]
+        tier = int(raw)
+        price = ARMOR_PRICES[tier]
+        if self.player.gold < price:
+            return [Event.info("Don't try to cheat me. It won't work!")]
+        if tier > self.player.armor_tier:
+            self.player.armor_tier = tier
+            self.player.armor_name = ARMOR_NAMES[tier]
+        self.player.gold -= price
+        self._shop_state = None
+        return [Event.info("Armor fitted and ready.")]
+
+    def _handle_shop_scrolls(self, raw: str) -> list[Event]:
+        if raw not in {"1", "2", "3", "4", "5"}:
+            return [Event.error("Choose 1..5.")]
+        spell = Spell(int(raw))
+        price = SPELL_PRICES[spell]
+        if self.player.gold < price:
+            return [Event.info("Don't try to cheat me. It won't work!")]
+        self.player.gold -= price
+        self.player.spells[spell] = self.player.spells.get(spell, 0) + 1
+        self._shop_state = None
+        return [Event.info("A scroll is yours.")]
+
+    def _handle_shop_potions(self, raw: str) -> list[Event]:
+        if raw not in {"1", "2"}:
+            return [Event.error("Choose 1 or 2.")]
+        if raw == "1":
+            price = POTION_PRICES["HEALING"]
+            if self.player.gold < price:
                 return [Event.info("Don't try to cheat me. It won't work!")]
             self.player.gold -= price
-            change = self.rng.randint(1, 6)
-            targets = {"1": "STR", "2": "DEX", "3": "IQ", "4": "MHP"}
-            self._apply_attribute_change(targets[raw], change, randomize=False)
+            self.player.hp = min(self.player.mhp, self.player.hp + 10)
             self._shop_state = None
-            return [Event.info("The potion takes effect.")]
+            return [Event.info("You quaff a healing potion.")]
+        price = POTION_PRICES["ATTRIBUTE"]
+        if self.player.gold < price:
+            return [Event.info("Don't try to cheat me. It won't work!")]
+        assert self._shop_state is not None
+        self._shop_state.phase = "attribute"
+        return [
+            Event.prompt(
+                "Attribute enhancer: 1> Strength  2> Dexterity  3> Intelligence  4> Max HP  0> Leave"
+            )
+        ]
 
-        return events
+    def _handle_shop_attribute(self, raw: str) -> list[Event]:
+        if raw in {"0", "Q"}:
+            self._shop_state = None
+            return [Event.info("Maybe another time.")]
+        if raw not in {"1", "2", "3", "4"}:
+            return [Event.error("Choose 1..4.")]
+        price = POTION_PRICES["ATTRIBUTE"]
+        if self.player.gold < price:
+            self._shop_state = None
+            return [Event.info("Don't try to cheat me. It won't work!")]
+        self.player.gold -= price
+        change = self.rng.randint(1, 6)
+        targets = {"1": "STR", "2": "DEX", "3": "IQ", "4": "MHP"}
+        self._apply_attribute_change(targets[raw], change, randomize=False)
+        self._shop_state = None
+        return [Event.info("The potion takes effect.")]
 
     def _apply_attribute_change(
         self, target: str, change: int, *, randomize: bool

@@ -54,14 +54,15 @@ def run() -> None:
     print("The dungeon awaits you...")
     _render_events(game.start_events())
 
+    prompt = "F/R/S> " if game.mode == Mode.ENCOUNTER else "--> "
     while True:
         print()
-        prompt = "F/R/S> " if game.mode == Mode.ENCOUNTER else "--> "
         command = input(prompt)
         result = game.step(command)
         _render_events(result.events)
         if result.mode.name in {"GAME_OVER", "VICTORY"}:
             break
+        prompt = result.prompt or "--> "
 
 
 def _render_events(events: list[Event]) -> None:
