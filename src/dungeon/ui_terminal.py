@@ -13,8 +13,8 @@ from dungeon.types import Event
 
 def run() -> None:
     args = _parse_args()
-    if args.continue_game:
-        if game := _load_game(Path("savegame.pkl")):
+    if args.continue_path:
+        if game := _load_game(Path(args.continue_path)):
             _run_game(game, resume=True)
         else:
             print("Unable to load saved game.")
@@ -133,7 +133,7 @@ def _run_game(game: Game, *, resume: bool) -> None:
 def _handle_slash_command(command: str, game: Game) -> Game | None:
     parts = command.strip().split(maxsplit=1)
     cmd = parts[0].lower()
-    path = Path(parts[1]) if len(parts) > 1 else Path("savegame.pkl")
+    path = Path(parts[1]) if len(parts) > 1 else Path("game.sav")
     match cmd:
         case "/save":
             try:
@@ -169,9 +169,10 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--continue",
-        dest="continue_game",
-        action="store_true",
-        help="Load savegame.pkl and continue.",
+        dest="continue_path",
+        nargs="?",
+        const="game.sav",
+        help="Load a save file and continue (defaults to game.sav).",
     )
     return parser.parse_args(sys.argv[1:])
 
