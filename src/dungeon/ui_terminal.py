@@ -18,11 +18,11 @@ def run() -> None:
         if game is None:
             print("Unable to load saved game.")
             return
-        _run_game(game)
+        _run_game(game, resume=True)
         return
 
     game = _setup_game()
-    _run_game(game)
+    _run_game(game, resume=False)
 
 
 def _setup_game() -> Game:
@@ -108,16 +108,22 @@ def _render_events(events: list[Event]) -> None:
                     print(event.text)
 
 
-def _run_game(game: Game) -> None:
+def _run_game(game: Game, *, resume: bool) -> None:
     print()
-    print("The dungeon awaits you...")
-    _render_events(game.start_events())
+    if not resume:
+        print("The dungeon awaits you...")
+        _render_events(game.start_events())
+    else:
+        print("Game resumed.")
 
     while True:
         print()
         command = input(_game_prompt(game))
         if command.strip().startswith("/"):
-            game = _handle_slash_command(command, game)
+            if loaded_game := _handle_slash_command(command, game):
+                game = loaded_game
+                print()
+                print("Game resumed.")
             continue
         result = game.step(command)
         _render_events(result.events)
@@ -133,7 +139,7 @@ def _game_prompt(game: Game) -> str:
     return "--> "
 
 
-def _handle_slash_command(command: str, game: Game) -> Game:
+def _handle_slash_command(command: str, game: Game) -> Game | None:
     parts = command.strip().split(maxsplit=1)
     cmd = parts[0].lower()
     path = Path(parts[1]) if len(parts) > 1 else Path("savegame.pkl")
@@ -145,19 +151,19 @@ def _handle_slash_command(command: str, game: Game) -> Game:
                 print(f"Game saved to {path}.")
             except OSError as exc:
                 print(f"Save failed: {exc}.")
-            return game
+            return
         case "/load":
             try:
                 with path.open("rb") as handle:
                     game = pickle.load(handle)
                 print(f"Game loaded from {path}.")
+                return game
             except FileNotFoundError:
                 print(f"Save file not found: {path}.")
             except OSError as exc:
                 print(f"Load failed: {exc}.")
-            return game
+            return
     print("Unknown command.")
-    return game
 
 
 def _load_game(path: Path) -> Game | None:
