@@ -116,7 +116,12 @@ def _run_game(game: Game, *, resume: bool) -> None:
 
     while True:
         print()
-        command = input(game.prompt())
+        try:
+            command = input(game.prompt())
+        except (KeyboardInterrupt, EOFError):
+            print()
+            print("Goodbye.")
+            exit()
         if command.strip().startswith("/"):
             if loaded_game := _handle_slash_command(command, game):
                 game = loaded_game
