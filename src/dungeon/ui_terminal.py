@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 
-from dungeon.constants import Race
+from dungeon.constants import Mode, Race
 from dungeon.engine import Game, create_player, roll_base_stats
 from dungeon.types import Event
 
@@ -56,7 +56,8 @@ def run() -> None:
 
     while True:
         print()
-        command = input("--> ")
+        prompt = "F/R/S> " if game.mode == Mode.ENCOUNTER else "--> "
+        command = input(prompt)
         result = game.step(command)
         _render_events(result.events)
         if result.mode.name in {"GAME_OVER", "VICTORY"}:

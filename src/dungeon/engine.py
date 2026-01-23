@@ -254,6 +254,7 @@ class Game:
             events.append(
                 Event.combat(f"You are facing an angry {self.encounter.monster_name}!")
             )
+            events.append(Event.info("Encounter mode: F=Fight  R=Run  S=Spell"))
             self.mode = Mode.ENCOUNTER
             return events
 
