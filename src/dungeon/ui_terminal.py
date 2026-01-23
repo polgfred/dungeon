@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import pickle
 import random
+from pathlib import Path
 
 from dungeon.constants import Mode, Race
 from dungeon.engine import Game, create_player, roll_base_stats
@@ -54,15 +56,16 @@ def run() -> None:
     print("The dungeon awaits you...")
     _render_events(game.start_events())
 
-    prompt = "F/R/S> " if game.mode == Mode.ENCOUNTER else "--> "
     while True:
         print()
-        command = input(prompt)
+        command = input(_game_prompt(game))
+        if command.strip().startswith("/"):
+            game = _handle_slash_command(command, game)
+            continue
         result = game.step(command)
         _render_events(result.events)
         if result.mode.name in {"GAME_OVER", "VICTORY"}:
             break
-        prompt = result.prompt or "--> "
 
 
 def _render_events(events: list[Event]) -> None:
@@ -101,6 +104,41 @@ def _render_events(events: list[Event]) -> None:
             case _:
                 if event.text:
                     print(event.text)
+
+
+def _game_prompt(game: Game) -> str:
+    if game.mode == Mode.ENCOUNTER:
+        return "F/R/S> "
+    if game._shop_state or game._awaiting_spell:
+        return "?> "
+    return "--> "
+
+
+def _handle_slash_command(command: str, game: Game) -> Game:
+    parts = command.strip().split(maxsplit=1)
+    cmd = parts[0].lower()
+    path = Path(parts[1]) if len(parts) > 1 else Path("savegame.pkl")
+    match cmd:
+        case "/save":
+            try:
+                with path.open("wb") as handle:
+                    pickle.dump(game, handle)
+                print(f"Game saved to {path}.")
+            except OSError as exc:
+                print(f"Save failed: {exc}.")
+            return game
+        case "/load":
+            try:
+                with path.open("rb") as handle:
+                    game = pickle.load(handle)
+                print(f"Game loaded from {path}.")
+            except FileNotFoundError:
+                print(f"Save file not found: {path}.")
+            except OSError as exc:
+                print(f"Load failed: {exc}.")
+            return game
+    print("Unknown command.")
+    return game
 
 
 def _prompt_race() -> Race:
