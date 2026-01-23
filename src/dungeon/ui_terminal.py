@@ -77,18 +77,17 @@ def _render_events(events: list[Event]) -> None:
             case "STATUS":
                 data = event.data
                 print("--------------------------------------")
-                print(f"GOLD - {data['gold']}       TREASURES - {data['treasures']}")
-                print(f"FLARES - {data['flares']}")
-                print(f"PROTECTIONS - {data['protection']}")
                 print(
-                    f"FIREBALLS - {data['fireball']}      LIGHTNINGS - {data['lightning']}"
+                    f"STR {data['str']:>2}  DEX {data['dex']:>2}  IQ {data['iq']:>2}  HP {data['hp']}/{data['mhp']}"
                 )
                 print(
-                    f"WEAKENINGS - {data['weaken']}       TELEPORTS - {data['teleport']}"
+                    f"GOLD {data['gold']:>3}  TREASURES {data['treasures']:<2}  FLARES {data['flares']:<2}"
                 )
                 print(
-                    f"You have {data['armor']} armour and your weapon is a {data['weapon']}."
+                    f"PROT {data['protection']:<2}  FIRE {data['fireball']:<2}  "
+                    f"LIGHT {data['lightning']:<2}  WEAK {data['weaken']:<2}  TP {data['teleport']:<2}"
                 )
+                print(f"ARMOR {data['armor']}  WEAPON {data['weapon']}")
                 print("--------------------------------------")
             case "PROMPT":
                 print(event.text)
