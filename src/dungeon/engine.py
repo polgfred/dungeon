@@ -198,6 +198,18 @@ class Game:
             return "F/R/S> "
         return "--> "
 
+    def resume_events(self) -> list[Event]:
+        events = [Event.status(self._status_data()), Event.map(self._map_grid())]
+        if self.mode == Mode.ENCOUNTER and self.encounter is not None:
+            events.insert(
+                0,
+                Event.combat(
+                    f"You are facing an angry {self.encounter.monster_name}!"
+                ),
+            )
+            events.insert(1, Event.info("Encounter mode: F=Fight  R=Run  S=Spell"))
+        return events
+
     def prompt(self) -> str:
         return self._next_prompt([])
 

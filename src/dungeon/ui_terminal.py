@@ -115,6 +115,7 @@ def _run_game(game: Game, *, resume: bool) -> None:
         _render_events(game.start_events())
     else:
         print("Game resumed.")
+        _render_events(game.resume_events())
 
     while True:
         print()
@@ -124,6 +125,7 @@ def _run_game(game: Game, *, resume: bool) -> None:
                 game = loaded_game
                 print()
                 print("Game resumed.")
+                _render_events(game.resume_events())
             continue
         result = game.step(command)
         _render_events(result.events)
