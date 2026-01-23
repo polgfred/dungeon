@@ -202,54 +202,56 @@ class Game:
         return self.dungeon.rooms[self.player.z][self.player.y][self.player.x]
 
     def _handle_explore(self, key: str) -> list[Event]:
-        events: list[Event] = []
         match key:
             case "N":
-                events.extend(self._move(-1, 0))
+                return self._move(-1, 0)
             case "S":
-                events.extend(self._move(1, 0))
+                return self._move(1, 0)
             case "E":
-                events.extend(self._move(0, 1))
+                return self._move(0, 1)
             case "W":
-                events.extend(self._move(0, -1))
+                return self._move(0, -1)
             case "U":
-                events.extend(self._stairs(up=True))
+                return self._stairs(up=True)
             case "D":
-                events.extend(self._stairs(up=False))
+                return self._stairs(up=False)
             case "M":
-                events.append(Event.map(self._map_grid()))
+                return [Event.map(self._map_grid())]
             case "F":
-                events.extend(self._use_flare())
+                return self._use_flare()
             case "X":
-                events.extend(self._attempt_exit())
+                return self._attempt_exit()
             case "L":
-                events.extend(self._use_mirror())
+                return self._use_mirror()
             case "O":
-                events.extend(self._open_chest())
+                return self._open_chest()
             case "R":
-                events.extend(self._read_scroll())
+                return self._read_scroll()
             case "P":
-                events.extend(self._drink_potion())
+                return self._drink_potion()
             case "B":
-                events.extend(self._open_vendor())
+                return self._open_vendor()
             case "T":
-                events.append(Event.status(self._status_data()))
+                return [Event.status(self._status_data())]
             case "H":
-                events.append(Event.info(self._help_text()))
-        return events
+                return [Event.info(self._help_text())]
+            case _:
+                return []
 
     def _handle_encounter(self, key: str) -> list[Event]:
         if self.encounter is None:
             self.mode = Mode.EXPLORE
             return [Event.error("There is nothing to fight.")]
-        if key == "F":
-            return self._fight_round()
-        if key == "R":
-            return self._run_attempt()
-        if key == "S":
-            self._awaiting_spell = True
-            return [Event.prompt("Choose a spell:", data=self._spell_menu())]
-        return []
+        match key:
+            case "F":
+                return self._fight_round()
+            case "R":
+                return self._run_attempt()
+            case "S":
+                self._awaiting_spell = True
+                return [Event.prompt("Choose a spell:", data=self._spell_menu())]
+            case _:
+                return []
 
     def _move(self, dy: int, dx: int) -> list[Event]:
         ny = self.player.y + dy
