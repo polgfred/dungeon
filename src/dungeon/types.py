@@ -46,4 +46,3 @@ class StepResult:
     events: list[Event]
     mode: Mode
     needs_input: bool
-    prompt: str | None = None

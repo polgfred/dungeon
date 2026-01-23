@@ -14,12 +14,10 @@ from dungeon.types import Event
 def run() -> None:
     args = _parse_args()
     if args.continue_game:
-        game = _load_game(Path("savegame.pkl"))
-        if game is None:
+        if game := _load_game(Path("savegame.pkl")):
+            _run_game(game, resume=True)
+        else:
             print("Unable to load saved game.")
-            return
-        _run_game(game, resume=True)
-        return
 
     game = _setup_game()
     _run_game(game, resume=False)
@@ -147,18 +145,9 @@ def _handle_slash_command(command: str, game: Game) -> Game | None:
                 print(f"Save failed: {exc}.")
             return
         case "/load":
-            try:
-                with path.open("rb") as handle:
-                    game = pickle.load(handle)
-                if not isinstance(game, Game):
-                    print("Save file did not contain a game.")
-                    return
+            if loaded_game := _load_game(path):
                 print(f"Game loaded from {path}.")
-                return game
-            except FileNotFoundError:
-                print(f"Save file not found: {path}.")
-            except OSError as exc:
-                print(f"Load failed: {exc}.")
+                return loaded_game
             return
     print("Unknown command.")
 
@@ -166,12 +155,15 @@ def _handle_slash_command(command: str, game: Game) -> Game | None:
 def _load_game(path: Path) -> Game | None:
     try:
         with path.open("rb") as handle:
-            return pickle.load(handle)
+            game = pickle.load(handle)
+            if not isinstance(game, Game):
+                print("Save file did not contain a game.")
+                return
+            return game
     except FileNotFoundError:
         print(f"Save file not found: {path}.")
     except OSError as exc:
         print(f"Load failed: {exc}.")
-    return None
 
 
 def _parse_args() -> argparse.Namespace:

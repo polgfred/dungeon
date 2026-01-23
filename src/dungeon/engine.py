@@ -131,7 +131,6 @@ class Game:
                 events=[Event.error("I don't understand that.")],
                 mode=self.mode,
                 needs_input=True,
-                prompt=self._next_prompt([]),
             )
 
         if self.mode in {Mode.GAME_OVER, Mode.VICTORY}:
@@ -139,7 +138,6 @@ class Game:
                 events=[],
                 mode=self.mode,
                 needs_input=False,
-                prompt=None,
             )
 
         if self._shop_state is not None:
@@ -148,7 +146,6 @@ class Game:
                 events=events,
                 mode=self.mode,
                 needs_input=True,
-                prompt=self._next_prompt(events),
             )
 
         if self._awaiting_spell:
@@ -157,7 +154,6 @@ class Game:
                 events=events,
                 mode=self.mode,
                 needs_input=True,
-                prompt=self._next_prompt(events),
             )
 
         key = raw[0]
@@ -169,7 +165,6 @@ class Game:
                         events=[Event.error("I don't understand that.")],
                         mode=self.mode,
                         needs_input=True,
-                        prompt=self._next_prompt([]),
                     )
                 events.extend(self._handle_explore(key))
             case Mode.ENCOUNTER:
@@ -178,7 +173,6 @@ class Game:
                         events=[Event.error("I don't understand that.")],
                         mode=self.mode,
                         needs_input=True,
-                        prompt=self._next_prompt([]),
                     )
                 events.extend(self._handle_encounter(key))
 
@@ -186,7 +180,6 @@ class Game:
             events=events,
             mode=self.mode,
             needs_input=True,
-            prompt=self._next_prompt(events),
         )
 
     def _next_prompt(self, events: list[Event]) -> str:
@@ -859,9 +852,8 @@ class Game:
 
         if self.encounter.vitality <= 0:
             events.extend(self._handle_monster_death())
-            return events
-
-        events.extend(self._monster_attack())
+        else:
+            events.extend(self._monster_attack())
         return events
 
     def _random_relocate(self, *, any_floor: bool) -> None:
