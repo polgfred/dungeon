@@ -622,31 +622,33 @@ class Game:
         return [Event.info("A scroll is yours.")]
 
     def _handle_shop_potions(self, raw: str) -> list[Event]:
-        if raw not in {"1", "2"}:
-            return [Event.error("Choose 1 or 2.")]
-        if raw == "1":
-            price = POTION_PRICES["HEALING"]
-            if self.player.gold < price:
-                return [Event.info("Don't try to cheat me. It won't work!")]
-            self.player.gold -= price
-            self.player.hp = min(self.player.mhp, self.player.hp + 10)
-            self._shop_state = None
-            return [Event.info("You quaff a healing potion.")]
-        price = POTION_PRICES["ATTRIBUTE"]
-        if self.player.gold < price:
-            return [Event.info("Don't try to cheat me. It won't work!")]
-        assert self._shop_state is not None
-        self._shop_state.phase = "attribute"
-        return [
-            Event.prompt(
-                "Attribute enhancer: 1> Strength  2> Dexterity  3> Intelligence  4> Max HP  0> Leave"
-            )
-        ]
+        match raw:
+            case "1":
+                price = POTION_PRICES["HEALING"]
+                if self.player.gold < price:
+                    return [Event.info("Don't try to cheat me. It won't work!")]
+                self.player.gold -= price
+                self.player.hp = min(self.player.mhp, self.player.hp + 10)
+                self._shop_state = None
+                return [Event.info("You quaff a healing potion.")]
+            case "2":
+                price = POTION_PRICES["ATTRIBUTE"]
+                if self.player.gold < price:
+                    return [Event.info("Don't try to cheat me. It won't work!")]
+                assert self._shop_state is not None
+                self._shop_state.phase = "attribute"
+                return [
+                    Event.prompt(
+                        "Attribute enhancer: 1> Strength  2> Dexterity  3> Intelligence  4> Max HP  0> Leave"
+                    )
+                ]
+            case _:
+                return [Event.error("Choose 1 or 2.")]
 
     def _handle_shop_attribute(self, raw: str) -> list[Event]:
-        if raw in {"0", "Q"}:
+        if raw == "0":
             self._shop_state = None
-            return [Event.info("Maybe another time.")]
+            return [Event.info("Perhaps another time.")]
         if raw not in {"1", "2", "3", "4"}:
             return [Event.error("Choose 1..4.")]
         price = POTION_PRICES["ATTRIBUTE"]
