@@ -212,9 +212,9 @@ class Game:
             case "W":
                 return self._move(0, -1)
             case "U":
-                return self._stairs(up=True)
+                return self._stairs_up()
             case "D":
-                return self._stairs(up=False)
+                return self._stairs_down()
             case "M":
                 return [Event.map(self._map_grid())]
             case "F":
@@ -262,17 +262,17 @@ class Game:
         self.player.x = nx
         return self._enter_room()
 
-    def _stairs(self, *, up: bool) -> list[Event]:
+    def _stairs_up(self) -> list[Event]:
         room = self._current_room()
-        if up:
-            if room.feature != Feature.STAIRS_UP:
-                return [
-                    Event.info(
-                        "There are no stairs leading up here, foolish adventurer."
-                    )
-                ]
-            self.player.z += 1
-            return self._enter_room()
+        if room.feature != Feature.STAIRS_UP:
+            return [
+                Event.info("There are no stairs leading up here, foolish adventurer.")
+            ]
+        self.player.z += 1
+        return self._enter_room()
+
+    def _stairs_down(self) -> list[Event]:
+        room = self._current_room()
         if room.feature != Feature.STAIRS_DOWN:
             return [Event.info("There is no downward staircase here.")]
         self.player.z -= 1
