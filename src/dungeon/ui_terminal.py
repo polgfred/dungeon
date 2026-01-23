@@ -9,24 +9,31 @@ from dungeon.types import Event
 
 def run() -> None:
     print("Dungeon of Doom")
+    print()
     seed = _prompt_int("Seed", default=0)
     rng = random.Random(seed)
+    print()
     race = _prompt_race()
 
     rng_state = rng.getstate()
     base_str, base_dex, base_iq, base_hp = roll_base_stats(rng, race)
+    print()
     print("Thy characteristics are as follows:")
     print(f" Strength     {base_str}")
     print(f" Dexterity    {base_dex}")
     print(f" Intelligence {base_iq}")
     print(f" Hit points   {base_hp}")
 
+    print()
     allocations = _prompt_allocations()
     gold = rng.randint(50, 60)
+    print()
     weapon_tier = _prompt_purchase("weapon", gold)
     gold -= _price_weapon(weapon_tier)
+    print()
     armor_tier = _prompt_purchase("armor", gold)
     gold -= _price_armor(armor_tier)
+    print()
     flare_count = _prompt_int(
         "Flares (1 gold each)", default=0, min_value=0, max_value=gold
     )
@@ -43,9 +50,12 @@ def run() -> None:
     )
 
     game = Game(seed=seed, player=player, rng=rng)
+    print()
+    print("The dungeon awaits you...")
     _render_events(game.start_events())
 
     while True:
+        print()
         command = input("--> ")
         result = game.step(command)
         _render_events(result.events)
