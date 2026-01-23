@@ -1,0 +1,13 @@
+{
+	"name": "Dungeon of Doom",
+	"image": "mcr.microsoft.com/devcontainers/base:trixie",
+	"onCreateCommand": "sudo apt-get update ; sudo apt-get install -y python3 python3-pip black",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.black-formatter",
+				"ms-python.python"
+			]
+		}
+	}
+}
