@@ -148,6 +148,9 @@ def _handle_slash_command(command: str, game: Game) -> Game | None:
             try:
                 with path.open("rb") as handle:
                     game = pickle.load(handle)
+                if not isinstance(game, Game):
+                    print("Save file did not contain a game.")
+                    return
                 print(f"Game loaded from {path}.")
                 return game
             except FileNotFoundError:
