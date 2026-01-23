@@ -409,15 +409,27 @@ class Game:
             treasure = self.rng.randint(1, 10)
             tx = self.rng.randint(1, 7)
             ty = self.rng.randint(1, 7)
+            tz = self.rng.randint(1, 7)
             return [
-                Event.info(f"You see the {self._treasure_name(treasure)} at {tx},{ty}!")
+                Event.info(
+                    f"You see the {self._treasure_name(treasure)} at {tz},{ty},{tx}!"
+                )
             ]
 
-        treasure = self.rng.randint(1, 10)
-        tx = self.rng.randint(1, 7)
-        ty = self.rng.randint(1, 7)
+        locations = [
+            (room.treasure_id, z, y, x)
+            for z, floor in enumerate(self.dungeon.rooms)
+            for y, row in enumerate(floor)
+            for x, room in enumerate(row)
+            if room.treasure_id and room.treasure_id not in self.player.treasures_found
+        ]
+        if not locations:
+            return [Event.info("The mirror is cloudy and yields no vision.")]
+        treasure, z, y, x = self.rng.choice(locations)
         return [
-            Event.info(f"You see the {self._treasure_name(treasure)} at {tx},{ty}!")
+            Event.info(
+                f"You see the {self._treasure_name(treasure)} at {z + 1},{y + 1},{x + 1}!"
+            )
         ]
 
     def _open_chest(self) -> list[Event]:
@@ -457,14 +469,7 @@ class Game:
             return [Event.info("You drink the potion... healing results.")]
 
         change = self.rng.randint(1, 6)
-        effect = self.rng.choice(
-            [
-                "STR",
-                "DEX",
-                "IQ",
-                "MHP",
-            ]
-        )
+        effect = self.rng.choice(["STR", "DEX", "IQ", "MHP"])
         self._apply_attribute_change(effect, change, randomize=True)
         return [
             Event.info("You drink the potion... strange energies surge through you.")
