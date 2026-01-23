@@ -28,10 +28,10 @@ def run() -> None:
     allocations = _prompt_allocations()
     gold = rng.randint(50, 60)
     print()
-    weapon_tier = _prompt_purchase("weapon", gold)
+    weapon_tier = _prompt_weapon(gold)
     gold -= _price_weapon(weapon_tier)
     print()
-    armor_tier = _prompt_purchase("armor", gold)
+    armor_tier = _prompt_armor(gold)
     gold -= _price_armor(armor_tier)
     print()
     flare_count = _prompt_int(
@@ -134,24 +134,36 @@ def _prompt_allocations() -> dict[str, int]:
     return allocations
 
 
-def _prompt_purchase(kind: str, gold: int) -> int:
-    label = "weapon" if kind == "weapon" else "armor"
+def _prompt_weapon(gold: int) -> int:
     while True:
         print(f"You have {gold} gold pieces.")
-        if kind == "weapon":
-            print("  1> Dagger 10")
-            print("  2> Short sword 20")
-            print("  3> Broadsword 30")
-        else:
-            print("  1> Leather 10")
-            print("  2> Wooden 20")
-            print("  3> Chain mail 30")
-        choice = input(f"Which {label}? ").strip()
+        print("  1> Dagger 10")
+        print("  2> Short sword 20")
+        print("  3> Broadsword 30")
+        choice = input("Which weapon? ").strip()
         if choice not in {"1", "2", "3"}:
             print("I don't understand that.")
             continue
         tier = int(choice)
-        price = _price_weapon(tier) if kind == "weapon" else _price_armor(tier)
+        price = _price_weapon(tier)
+        if price > gold:
+            print("Don't try to cheat me. It won't work!")
+            continue
+        return tier
+
+
+def _prompt_armor(gold: int) -> int:
+    while True:
+        print(f"You have {gold} gold pieces.")
+        print("  1> Leather 10")
+        print("  2> Wooden 20")
+        print("  3> Chain mail 30")
+        choice = input("Which armor? ").strip()
+        if choice not in {"1", "2", "3"}:
+            print("I don't understand that.")
+            continue
+        tier = int(choice)
+        price = _price_armor(tier)
         if price > gold:
             print("Don't try to cheat me. It won't work!")
             continue
