@@ -21,7 +21,7 @@ from dungeon.constants import (
     Spell,
 )
 from dungeon.generation import generate_dungeon
-from dungeon.model import Dungeon, Encounter, Player
+from dungeon.model import Encounter, Player
 from dungeon.types import Event, StepResult
 
 
