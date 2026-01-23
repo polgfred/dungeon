@@ -1,0 +1,41 @@
+import random
+
+from dungeon.constants import Race
+from dungeon.engine import Game, create_player
+from dungeon.model import Encounter
+from dungeon.constants import Mode
+
+
+def _make_game(seed: int) -> Game:
+    rng = random.Random(seed)
+    player = create_player(
+        rng=rng,
+        race=Race.HUMAN,
+        allocations={"STR": 2, "DEX": 2, "IQ": 1},
+        weapon_tier=1,
+        armor_tier=1,
+        flare_count=0,
+    )
+    return Game(seed=seed, player=player, rng=rng)
+
+
+def test_run_success_relocates():
+    game = _make_game(1)
+    game.rng = random.Random(1)
+    game.encounter = Encounter(monster_level=1, monster_name="Skeleton", vitality=5)
+    game.mode = Mode.ENCOUNTER
+    start = (game.player.z, game.player.y, game.player.x)
+    events = game._run_attempt()
+    assert game.mode == game.mode.EXPLORE
+    assert (game.player.z, game.player.y, game.player.x) != start
+    assert any("slip away" in e.text for e in events)
+
+
+def test_run_fail_sets_fatigued():
+    game = _make_game(2)
+    game.rng = random.Random(2)
+    game.encounter = Encounter(monster_level=1, monster_name="Skeleton", vitality=5)
+    game.mode = Mode.ENCOUNTER
+    events = game._run_attempt()
+    assert game.player.fatigued is True
+    assert any("escape" in e.text for e in events)
