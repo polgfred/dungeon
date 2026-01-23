@@ -332,7 +332,10 @@ class Game:
                 nx = self.player.x + dx
                 if 0 <= ny <= 6 and 0 <= nx <= 6:
                     self.dungeon.rooms[self.player.z][ny][nx].seen = True
-        return [Event.info("The flare illuminates nearby rooms.")]
+        return [
+            Event.info("The flare illuminates nearby rooms."),
+            Event.map(self._map_grid()),
+        ]
 
     def _map_grid(self) -> list[str]:
         grid: list[str] = []
@@ -381,7 +384,12 @@ class Game:
             "X=eXit              U=Up             D=Down         N=North\n"
             "S=South             E=East           W=West         B=Buy\n"
             "\n"
-            "Encounter: F=Fight  R=Run  S=Spell"
+            "Encounter: F=Fight  R=Run  S=Spell\n"
+            "\n"
+            "MAP MEANINGS:\n"
+            "0=Empty  m=Mirror  s=Scroll  c=Chest  f=Flares  p=Potion\n"
+            "v=Vendor  t=Thief  w=Warp  U=Up  D=Down  X=eXit\n"
+            "T=Treasure  M=Monster  *=You  ?=Unknown"
         )
 
     def _use_mirror(self) -> list[Event]:
