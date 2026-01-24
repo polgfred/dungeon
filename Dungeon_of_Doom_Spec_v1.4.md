@@ -183,7 +183,7 @@ Sell:
 - Weapons, Armor, Spells, Potions
 
 Prices:
-- Weapons/Armor: 50 / 100 / 150
+- Weapons/Armor: 10 / 20 / 30
 - Spells: Protection 50, Fireball 30, Lightning 50, Weaken 75, Teleport 80
 - Potions: Healing 50, Attribute Enhancer 100
 

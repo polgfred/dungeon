@@ -43,7 +43,7 @@ dungeon/
 - `model.py`: dataclasses (`Room`, `Dungeon`, `Player`, etc.)
 - `generation.py`: dungeon generation routines + invariant validation helpers
 - `engine.py`: rules + state machine; **no printing**
-- `ui_terminal.py`: terminal I/O loop; formatting + prompts only
+- `terminal.py`: terminal I/O loop; formatting + prompts only
 
 ---
 
@@ -60,7 +60,7 @@ Also define:
 - single-letter command sets (explore vs encounter)
 - monster name table by level
 - treasure name list (10)
-- vendor price tables
+- vendor price tables (weapons/armor: 10 / 20 / 30)
 
 ---
 
@@ -109,6 +109,7 @@ class Player:
     armor_tier: int = 0        # 0..3
     weapon_name: str = "none"
     armor_name: str = "none"
+    armor_damaged: bool = False
 
     # Spell charges
     spells: dict[Spell, int] = field(default_factory=dict)
@@ -207,6 +208,9 @@ class Game:
 
     def step(self, command: str) -> StepResult:
         """Advance game state by one command."""
+
+    def prompt(self) -> str:
+        """Return the current input prompt string."""
 ```
 
 ### Parsing
@@ -222,10 +226,12 @@ On entering a cell:
 - if thief: steal gold and clear feature
 - if flare pickup: increment flares and clear feature
 - if monster: start encounter and switch to ENCOUNTER
+- chest damage marks armor as damaged for display; tier/defense stays the same
 
 ### Vendor modernization
 - entering vendor does **not** prompt
 - `B` opens shop only if in vendor room
+- `0` exits shop at any stage (category/item/attribute)
 
 ### Exit logic
 - `X` only works on EXIT room
@@ -276,7 +282,7 @@ UI responsibilities:
 
 ---
 
-## 8. Terminal UI (`ui_terminal.py`)
+## 8. Terminal UI (`terminal.py`)
 
 ### API
 ```python
@@ -290,6 +296,8 @@ Responsibilities:
 - render `Event`s
 - prompt for command
 - in ENCOUNTER, show encounter prompt (Fight/Run/Spell) but still accept single-letter commands
+- status report shows stats (STR/DEX/IQ/HP), gold/treasures/flares, spell counts, and armor/weapon (with damaged tag)
+- support `/save [path]` and `/load [path]` (pickle `Game`), plus `--continue [path]` on startup (default `game.sav`)
 
 ---
 
