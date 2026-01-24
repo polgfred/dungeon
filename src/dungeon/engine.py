@@ -102,16 +102,16 @@ class Game:
 
     def __init__(
         self,
+        *,
         seed: int,
         player: Player,
         rng: random.Random | None = None,
-        *,
         debug: bool = False,
     ):
         self.save_version = self.SAVE_VERSION
         self.rng = rng or random.Random(seed)
-        self.dungeon = generate_dungeon(self.rng)
         self.player = player
+        self.dungeon = generate_dungeon(self.rng)
         self.mode = Mode.EXPLORE
         self._encounter_session: EncounterSession | None = None
         self._shop_session: VendorSession | None = None
