@@ -61,21 +61,16 @@ def create_player(
 ) -> Player:
     str_, dex, iq, hp = roll_base_stats(rng, race)
 
-    remaining = 5
-    for key in ("STR", "DEX", "IQ"):
-        add = int(allocations.get(key, 0))
-        if add < 0 or add > remaining:
-            raise ValueError("Invalid allocation amount.")
-        remaining -= add
-        if key == "STR":
-            str_ = min(18, str_ + add)
-        elif key == "DEX":
-            dex = min(18, dex + add)
-        elif key == "IQ":
-            iq = min(18, iq + add)
-
-    if remaining != 0:
+    str_add = int(allocations["STR"])
+    dex_add = int(allocations["DEX"])
+    iq_add = int(allocations["IQ"])
+    if min(str_add, dex_add, iq_add) < 0:
+        raise ValueError("Invalid allocation amount.")
+    if str_add + dex_add + iq_add != 5:
         raise ValueError("Allocation must total 5 points.")
+    str_ = min(18, str_ + str_add)
+    dex = min(18, dex + dex_add)
+    iq = min(18, iq + iq_add)
 
     gold = rng.randint(50, 60)
     if weapon_tier not in (1, 2, 3):
