@@ -772,6 +772,10 @@ class Game:
                 Event.combat("As it dies, it launches one final desperate attack.")
             )
             events.extend(self._monster_attack())
+            if self.mode == Mode.GAME_OVER:
+                self.encounter = None
+                self._current_room().monster_level = 0
+                return events
 
         room = self._current_room()
         if room.treasure_id:

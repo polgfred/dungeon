@@ -49,3 +49,30 @@ def test_run_fail_sets_fatigued():
     events = game._run_attempt()
     assert game.player.fatigued is True
     assert any("escape" in e.text for e in events)
+
+
+def test_final_attack_death_ends_game_without_loot():
+    game = _make_game(3)
+    game.encounter = Encounter(monster_level=1, monster_name="Skeleton", vitality=1)
+    game.mode = Mode.ENCOUNTER
+    room = game.dungeon.rooms[game.player.z][game.player.y][game.player.x]
+    room.monster_level = 1
+    room.treasure_id = 1
+
+    game.rng.random = lambda: 0.99
+
+    def _fatal_attack() -> list:
+        game.player.hp = 0
+        game.mode = Mode.GAME_OVER
+        return []
+
+    game._monster_attack = _fatal_attack
+    events = game._handle_monster_death()
+
+    assert game.mode == Mode.GAME_OVER
+    assert game.encounter is None
+    assert room.monster_level == 0
+    assert 1 not in game.player.treasures_found
+    assert not any(
+        e.text and ("You found" in e.text or "You find" in e.text) for e in events
+    )
