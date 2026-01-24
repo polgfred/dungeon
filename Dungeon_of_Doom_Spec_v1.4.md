@@ -72,7 +72,6 @@ Interaction:
 - B buy (vendor only)
 
 Info:
-- T status
 - H help
 
 Encounter-only:
