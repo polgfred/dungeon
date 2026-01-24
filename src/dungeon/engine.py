@@ -120,6 +120,7 @@ class Game:
                 needs_input=True,
             )
 
+        # Terminal conditions short-circuit the loop.
         if self.mode in {Mode.GAME_OVER, Mode.VICTORY}:
             return StepResult(
                 events=[],
@@ -127,6 +128,7 @@ class Game:
                 needs_input=False,
             )
 
+        # Session delegation for vendor and encounter flows.
         if self._shop_session:
             result = self._shop_session.step(raw)
             events.extend(result.events)
@@ -144,6 +146,7 @@ class Game:
             if result.mode != Mode.ENCOUNTER:
                 self._encounter_session = None
             self.mode = result.mode
+            # Follow-up relocation for run/teleport outcomes.
             if result.relocate:
                 self._random_relocate(any_floor=result.relocate_any_floor)
                 if result.enter_room:
@@ -154,6 +157,7 @@ class Game:
                 needs_input=self.mode not in {Mode.GAME_OVER, Mode.VICTORY},
             )
 
+        # Explore-mode command routing.
         key = raw[0]
 
         assert self.mode == Mode.EXPLORE
@@ -177,6 +181,7 @@ class Game:
         return [Event.status(self._status_data())]
 
     def _next_prompt(self, events: list[Event]) -> str:
+        # Session-driven prompts override generic ones.
         if self._shop_session:
             return self._shop_session.prompt()
         if self._encounter_session:
@@ -187,6 +192,7 @@ class Game:
 
     def resume_events(self) -> list[Event]:
         events: list[Event] = []
+        # Encounter banner precedes the map on resume.
         if self._encounter_session:
             events.extend(self._encounter_session.start_events())
         events.append(Event.map(self._map_grid()))
@@ -260,6 +266,7 @@ class Game:
         room = self._current_room()
         room.seen = True
 
+        # Encounter start takes precedence over room features/treasure.
         if room.monster_level > 0:
             self._encounter_session = EncounterSession.start(
                 rng=self.rng, player=self.player, room=room
@@ -485,10 +492,7 @@ class Game:
         change = self.rng.randint(1, 6)
         if self.rng.random() > 0.5:
             change = -change
-        self.player.apply_attribute_change(
-            target=effect,
-            change=change,
-        )
+        self.player.apply_attribute_change(target=effect, change=change)
         return [
             Event.info("You drink the potion... strange energies surge through you.")
         ]

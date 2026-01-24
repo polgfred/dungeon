@@ -40,6 +40,7 @@ class VendorSession:
         return "?> "
 
     def step(self, raw: str) -> VendorResult:
+        # Route input based on the current shop phase.
         match self.phase:
             case "category":
                 return self._handle_shop_category(raw)
@@ -51,6 +52,7 @@ class VendorSession:
                 return VendorResult([Event.error("Choose 1..4.")])
 
     def _handle_shop_category(self, raw: str) -> VendorResult:
+        # Select a category and show the corresponding menu.
         prompt_map = {
             "1": "Weapons: 1> Dagger  2> Short sword  3> Broadsword  0> Leave",
             "2": "Armour: 1> Leather  2> Wooden  3> Chain mail  0> Leave",
@@ -68,6 +70,7 @@ class VendorSession:
                 return VendorResult([Event.error("Choose 1..4.")])
 
     def _handle_shop_item(self, raw: str) -> VendorResult:
+        # Dispatch item selection or exit.
         match raw:
             case "0":
                 return VendorResult([Event.info("Perhaps another time.")], done=True)
@@ -77,6 +80,7 @@ class VendorSession:
                 return VendorResult([Event.error("Choose 1..5.")])
 
     def _handle_shop_item_choice(self, raw: str) -> VendorResult:
+        # Route to the category-specific purchase handler.
         match self.category:
             case "1":
                 return self._handle_shop_weapons(raw)
@@ -90,6 +94,7 @@ class VendorSession:
                 return VendorResult([Event.error("Choose 1..4.")])
 
     def _handle_shop_weapons(self, raw: str) -> VendorResult:
+        # Resolve a weapon purchase.
         if raw not in {"1", "2", "3"}:
             return VendorResult([Event.error("Choose 1..3.")])
         tier = int(raw)
@@ -102,6 +107,7 @@ class VendorSession:
         return VendorResult([Event.info("A fine weapon for your quest.")], done=True)
 
     def _handle_shop_armor(self, raw: str) -> VendorResult:
+        # Resolve an armor purchase.
         if raw not in {"1", "2", "3"}:
             return VendorResult([Event.error("Choose 1..3.")])
         tier = int(raw)
@@ -115,6 +121,7 @@ class VendorSession:
         return VendorResult([Event.info("Armor fitted and ready.")], done=True)
 
     def _handle_shop_scrolls(self, raw: str) -> VendorResult:
+        # Resolve a scroll purchase.
         if raw not in {"1", "2", "3", "4", "5"}:
             return VendorResult([Event.error("Choose 1..5.")])
         spell = Spell(int(raw))
@@ -126,6 +133,7 @@ class VendorSession:
         return VendorResult([Event.info("A scroll is yours.")], done=True)
 
     def _handle_shop_potions(self, raw: str) -> VendorResult:
+        # Resolve potion purchase or attribute selection.
         match raw:
             case "1":
                 price = POTION_PRICES["HEALING"]
@@ -156,6 +164,7 @@ class VendorSession:
                 return VendorResult([Event.error("Choose 1 or 2.")])
 
     def _handle_shop_attribute(self, raw: str) -> VendorResult:
+        # Apply attribute enhancement or exit.
         if raw == "0":
             return VendorResult([Event.info("Perhaps another time.")], done=True)
         if raw not in {"1", "2", "3", "4"}:
@@ -168,8 +177,5 @@ class VendorSession:
         self.player.gold -= price
         change = self.rng.randint(1, 6)
         targets = {"1": "STR", "2": "DEX", "3": "IQ", "4": "MHP"}
-        self.player.apply_attribute_change(
-            target=targets[raw],
-            change=change,
-        )
+        self.player.apply_attribute_change(target=targets[raw], change=change)
         return VendorResult([Event.info("The potion takes effect.")], done=True)

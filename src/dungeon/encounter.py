@@ -40,6 +40,7 @@ class EncounterSession:
     def start(
         cls, *, rng: random.Random, player: Player, room: Room
     ) -> "EncounterSession":
+        # Initialize encounter state from the room and reset temporary flags.
         level = room.monster_level
         name = MONSTER_NAMES[level - 1]
         vitality = 3 * level + rng.randint(0, 3)
@@ -66,6 +67,7 @@ class EncounterSession:
         return "F/R/S> "
 
     def step(self, raw: str) -> EncounterResult:
+        # Input handling: pending spell selection vs action command.
         if self.awaiting_spell:
             return self._handle_spell_choice(raw)
         if not raw:
@@ -95,6 +97,8 @@ class EncounterSession:
         attack_score = (
             20 + 5 * (11 - level) + self.player.dex + 3 * self.player.weapon_tier
         )
+
+        # Resolve player attack.
         roll = self.rng.randint(1, 100)
         if roll > attack_score:
             events.append(Event.combat(f"The {self.monster_name} evades your blow!"))
@@ -115,11 +119,13 @@ class EncounterSession:
                 self.player.weapon_name = "(Broken)"
                 events.append(Event.info("Your weapon breaks with the impact!"))
 
+        # Resolve monster response.
         attack_events, mode = self._monster_attack()
         events.extend(attack_events)
         return EncounterResult(events, mode)
 
     def _run_attempt(self) -> EncounterResult:
+        # Attempt escape or apply fatigue.
         if self.player.fatigued:
             return EncounterResult(
                 [Event.info("You are quite fatigued after your previous efforts.")],
@@ -145,6 +151,7 @@ class EncounterSession:
         )
 
     def _monster_attack(self) -> tuple[list[Event], Mode]:
+        # Resolve monster attack and damage.
         events: list[Event] = []
         level = self.monster_level
         dodge_score = 20 + 5 * (11 - level) + 2 * self.player.dex
@@ -164,6 +171,7 @@ class EncounterSession:
 
     def _handle_monster_death(self, events: list[Event]) -> EncounterResult:
         events.append(Event.combat(f"The foul {self.monster_name} expires."))
+        # Resolve final attack, if any.
         if self.rng.random() > 0.7:
             events.append(
                 Event.combat("As it dies, it launches one final desperate attack.")
@@ -177,6 +185,7 @@ class EncounterSession:
                 self.vitality = 0
                 return EncounterResult(events, mode)
 
+        # Resolve rewards and cleanup.
         if self.room.treasure_id:
             events.extend(self._award_treasure(self.room.treasure_id))
             self.room.treasure_id = 0
@@ -192,6 +201,7 @@ class EncounterSession:
         return EncounterResult(events, Mode.EXPLORE)
 
     def _handle_spell_choice(self, raw: str) -> EncounterResult:
+        # Validate selection and charges before casting.
         self.awaiting_spell = False
         if raw not in {"1", "2", "3", "4", "5"}:
             return EncounterResult([Event.error("Choose 1..5.")], Mode.ENCOUNTER)
@@ -220,6 +230,7 @@ class EncounterSession:
 
     def _cast_spell(self, spell: Spell) -> EncounterResult:
         events: list[Event] = []
+        # Apply spell effect and follow-up resolution.
         match spell:
             case Spell.PROTECTION:
                 self.player.temp_armor_bonus += 3

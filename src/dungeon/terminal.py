@@ -18,6 +18,7 @@ class Terminal:
 
     def run(self) -> None:
         args = self._parse_args()
+        # Resume path for saved games.
         if args.continue_path:
             game, events = self._load_game(Path(args.continue_path))
             if game is None:
@@ -27,6 +28,7 @@ class Terminal:
             self._run_game(game, initial_events=game.resume_events())
             return
 
+        # New game setup and start.
         game = self._setup_game()
         self._run_game(game, initial_events=game.start_events())
 
@@ -47,6 +49,7 @@ class Terminal:
         print(f" Intelligence {base_iq}")
         print(f" Hit points   {base_hp}")
 
+        # Allocation and starting equipment.
         print()
         allocations = self._prompt_allocations()
         gold = rng.randint(50, 60)
@@ -62,6 +65,7 @@ class Terminal:
         )
         gold -= flare_count
 
+        # Replay RNG for deterministic starting state.
         rng.setstate(rng_state)
         player = create_player(
             rng=rng,
@@ -85,6 +89,7 @@ class Terminal:
                 self._clear_screen()
                 print("Goodbye.")
                 exit()
+            # Slash commands bypass the engine command loop.
             if command.strip().startswith("/"):
                 loaded_game, events = self._handle_slash_command(command, game)
                 if loaded_game is not None:
@@ -102,6 +107,7 @@ class Terminal:
                 break
 
     def _render_turn(self, events: list[Event]) -> None:
+        # Full-screen render of status + event log.
         self._clear_screen()
         if self.game is not None:
             self._render_events(self.game.status_events())
@@ -158,6 +164,7 @@ class Terminal:
     def _handle_slash_command(
         self, command: str, game: Game
     ) -> tuple[Game | None, list[Event]]:
+        # File-based save/load commands.
         parts = command.strip().split(maxsplit=1)
         cmd = parts[0].lower()
         path = Path(parts[1]) if len(parts) > 1 else Path(self.default_save)
@@ -177,6 +184,7 @@ class Terminal:
         return None, [Event.error("Unknown command.")]
 
     def _load_game(self, path: Path) -> tuple[Game | None, list[Event]]:
+        # Load and validate the saved game payload.
         try:
             with path.open("rb") as handle:
                 game = pickle.load(handle)
