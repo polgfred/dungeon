@@ -19,7 +19,8 @@ def _make_game(seed: int) -> Game:
 
 def test_vendor_requires_b():
     game = _make_game(3)
-    events = game._open_vendor()
+    result = game.step("B")
+    events = result.events
     assert any("no vendor" in e.text.lower() for e in events)
 
 
@@ -29,5 +30,5 @@ def test_vendor_entry_no_prompt():
     room.feature = Feature.VENDOR
     room.monster_level = 0
     events = game._enter_room()
-    assert game._shop_state is None
+    assert game._shop_session is None
     assert any("vendor" in e.text.lower() for e in events)

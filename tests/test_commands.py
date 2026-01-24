@@ -2,7 +2,6 @@ import random
 
 from dungeon.constants import Feature, Race, Spell
 from dungeon.engine import Game, create_player
-from dungeon.model import Encounter
 
 
 def _make_game(seed: int) -> Game:
@@ -36,20 +35,32 @@ def test_treasure_awarded_on_kill():
     room.monster_level = 1
     game._enter_room()
     assert 1 not in game.player.treasures_found
-    game.encounter.vitality = 0
-    game._handle_monster_death()
+    session = game._encounter_session
+    assert session is not None
+    session.vitality = 0
+    session._handle_monster_death([])
     assert 1 in game.player.treasures_found
 
 
 def test_spell_clamping_never_increases_vitality():
     game = _make_game(7)
-    game.encounter = Encounter(monster_level=1, monster_name="Skeleton", vitality=10)
+    room = game._current_room()
+    room.monster_level = 1
+    game._enter_room()
+    session = game._encounter_session
+    assert session is not None
     game.player.iq = 18
-    before = game.encounter.vitality
-    game._cast_spell(Spell.FIREBALL)
-    assert game.encounter is None or game.encounter.vitality <= before
+    before = session.vitality
+    session._cast_spell(Spell.FIREBALL)
+    assert session.vitality <= before
 
-    game.encounter = Encounter(monster_level=1, monster_name="Skeleton", vitality=10)
-    before = game.encounter.vitality
-    game._cast_spell(Spell.LIGHTNING)
-    assert game.encounter is None or game.encounter.vitality <= before
+    game = _make_game(8)
+    room = game._current_room()
+    room.monster_level = 1
+    game._enter_room()
+    session = game._encounter_session
+    assert session is not None
+    game.player.iq = 18
+    before = session.vitality
+    session._cast_spell(Spell.LIGHTNING)
+    assert session.vitality <= before

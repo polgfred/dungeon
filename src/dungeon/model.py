@@ -47,9 +47,19 @@ class Player:
 
     attr_potion_target: str | None = None
 
-
-@dataclass
-class Encounter:
-    monster_level: int
-    monster_name: str
-    vitality: int
+    def apply_attribute_change(
+        self,
+        *,
+        target: str,
+        change: int,
+    ) -> None:
+        match target:
+            case "STR":
+                self.str_ = max(1, min(18, self.str_ + change))
+            case "DEX":
+                self.dex = max(1, min(18, self.dex + change))
+            case "IQ":
+                self.iq = max(1, min(18, self.iq + change))
+            case "MHP":
+                self.mhp = max(1, self.mhp + change)
+                self.hp = max(1, min(self.hp + change, self.mhp))
