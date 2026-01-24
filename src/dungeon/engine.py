@@ -156,16 +156,14 @@ class Game:
 
         key = raw[0]
 
-        match self.mode:
-            case Mode.EXPLORE:
-                if key not in EXPLORE_COMMANDS:
-                    return StepResult(
-                        events=[Event.error("I don't understand that.")],
-                        mode=self.mode,
-                        needs_input=True,
-                    )
-                events.extend(self._handle_explore(key))
-
+        assert self.mode == Mode.EXPLORE
+        if key not in EXPLORE_COMMANDS:
+            return StepResult(
+                events=[Event.error("I don't understand that.")],
+                mode=self.mode,
+                needs_input=True,
+            )
+        events.extend(self._handle_explore(key))
         return StepResult(
             events=events,
             mode=self.mode,
@@ -188,9 +186,10 @@ class Game:
         return "--> "
 
     def resume_events(self) -> list[Event]:
-        events = [Event.map(self._map_grid())]
-        if self.mode == Mode.ENCOUNTER and self._encounter_session:
-            events[:0] = self._encounter_session.start_events()
+        events: list[Event] = []
+        if self._encounter_session:
+            events.extend(self._encounter_session.start_events())
+        events.append(Event.map(self._map_grid()))
         return events
 
     def _current_room(self):
