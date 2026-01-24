@@ -18,9 +18,9 @@ def run() -> None:
             _run_game(game, resume=True)
         else:
             print("Unable to load saved game.")
-
-    game = _setup_game()
-    _run_game(game, resume=False)
+    else:
+        game = _setup_game()
+        _run_game(game, resume=False)
 
 
 def _setup_game() -> Game:
