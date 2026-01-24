@@ -40,6 +40,10 @@ class Event:
     def map(cls, grid: list[str]) -> "Event":
         return cls("MAP", "", {"grid": grid})
 
+    @classmethod
+    def debug(cls, text: str) -> "Event":
+        return cls("DEBUG", text)
+
 
 @dataclass
 class StepResult:

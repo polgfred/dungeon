@@ -98,14 +98,24 @@ def create_player(
 
 class Game:
     SIZE = 7
+    SAVE_VERSION = 1
 
-    def __init__(self, seed: int, player: Player, rng: random.Random | None = None):
+    def __init__(
+        self,
+        seed: int,
+        player: Player,
+        rng: random.Random | None = None,
+        *,
+        debug: bool = False,
+    ):
+        self.save_version = self.SAVE_VERSION
         self.rng = rng or random.Random(seed)
         self.dungeon = generate_dungeon(self.rng)
         self.player = player
         self.mode = Mode.EXPLORE
         self._encounter_session: EncounterSession | None = None
         self._shop_session: VendorSession | None = None
+        self.debug = debug
 
     def start_events(self) -> list[Event]:
         return self._enter_room()
@@ -178,7 +188,19 @@ class Game:
         return self._next_prompt([])
 
     def status_events(self) -> list[Event]:
-        return [Event.status(self._status_data())]
+        events = [Event.status(self._status_data())]
+        if self.debug:
+            events.append(
+                Event.debug(
+                    "DEBUG STATS: "
+                    f"weapon_tier={self.player.weapon_tier} "
+                    f"armor_tier={self.player.armor_tier} "
+                    f"armor_damaged={self.player.armor_damaged} "
+                    f"temp_armor_bonus={self.player.temp_armor_bonus} "
+                    f"fatigued={self.player.fatigued}"
+                )
+            )
+        return events
 
     def _next_prompt(self, events: list[Event]) -> str:
         # Session-driven prompts override generic ones.
@@ -269,7 +291,7 @@ class Game:
         # Encounter start takes precedence over room features/treasure.
         if room.monster_level > 0:
             self._encounter_session = EncounterSession.start(
-                rng=self.rng, player=self.player, room=room
+                rng=self.rng, player=self.player, room=room, debug=self.debug
             )
             events.extend(self._encounter_session.start_events())
             self.mode = Mode.ENCOUNTER

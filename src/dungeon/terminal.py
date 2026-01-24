@@ -15,9 +15,11 @@ class Terminal:
     def __init__(self, *, default_save: str = "game.sav") -> None:
         self.default_save = default_save
         self.game: Game | None = None
+        self.debug = False
 
     def run(self) -> None:
         args = self._parse_args()
+        self.debug = args.debug
         # Resume path for saved games.
         if args.continue_path:
             game, events = self._load_game(Path(args.continue_path))
@@ -76,7 +78,7 @@ class Terminal:
             flare_count=flare_count,
         )
 
-        return Game(seed=seed, player=player, rng=rng)
+        return Game(seed=seed, player=player, rng=rng, debug=self.debug)
 
     def _run_game(self, game: Game, *, initial_events: list[Event]) -> None:
         self.game = game
@@ -160,6 +162,9 @@ class Terminal:
                 case "INFO" | "ERROR" | "COMBAT" | "LOOT":
                     if event.text:
                         print(event.text)
+                case "DEBUG":
+                    if self.debug and event.text:
+                        print(event.text)
                 case _:
                     if event.text:
                         print(event.text)
@@ -193,11 +198,21 @@ class Terminal:
                 game = pickle.load(handle)
                 if not isinstance(game, Game):
                     return None, [Event.error("Save file did not contain a game.")]
+                if getattr(game, "save_version", None) != Game.SAVE_VERSION:
+                    return None, [
+                        Event.error("Save file is incompatible with this version.")
+                    ]
+                # Set the game's debug flags based on our command line flag.
+                game.debug = self.debug
+                if game._encounter_session:
+                    game._encounter_session.debug = self.debug
                 return game, []
         except FileNotFoundError:
             return None, [Event.error(f"Save file not found: {path}.")]
         except OSError as exc:
             return None, [Event.error(f"Load failed: {exc}.")]
+        except Exception as exc:
+            return None, [Event.error(f"Load failed: {exc.__class__.__name__}: {exc}.")]
         return None, [Event.error("Load failed.")]
 
     def _clear_screen(self) -> None:
@@ -211,6 +226,11 @@ class Terminal:
             nargs="?",
             const=self.default_save,
             help=f"Load a save file and continue (defaults to {self.default_save}).",
+        )
+        parser.add_argument(
+            "--debug",
+            action="store_true",
+            help="Show debug details during play.",
         )
         return parser.parse_args(sys.argv[1:])
 
