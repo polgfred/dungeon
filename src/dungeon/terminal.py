@@ -92,7 +92,7 @@ class Terminal:
             # Slash commands bypass the engine command loop.
             if command.strip().startswith("/"):
                 loaded_game, events = self._handle_slash_command(command, game)
-                if loaded_game is not None:
+                if loaded_game:
                     game = loaded_game
                     self.game = game
                     last_events = game.resume_events()
@@ -109,7 +109,7 @@ class Terminal:
     def _render_turn(self, events: list[Event]) -> None:
         # Full-screen render of status + event log.
         self._clear_screen()
-        if self.game is not None:
+        if self.game:
             self._render_events(self.game.status_events())
             print()
         self._render_events(events)
