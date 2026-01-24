@@ -36,6 +36,9 @@ class VendorSession:
             )
         ]
 
+    def prompt(self) -> str:
+        return "?> "
+
     def step(self, raw: str) -> VendorResult:
         match self.phase:
             case "category":

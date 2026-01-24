@@ -179,14 +179,12 @@ class Game:
         return [Event.status(self._status_data())]
 
     def _next_prompt(self, events: list[Event]) -> str:
+        if self._shop_session:
+            return self._shop_session.prompt()
+        if self._encounter_session:
+            return self._encounter_session.prompt()
         if any(event.kind == "PROMPT" for event in events):
             return "?> "
-        if self._shop_session:
-            return "?> "
-        if self._encounter_session and self._encounter_session.awaiting_spell:
-            return "?> "
-        if self.mode == Mode.ENCOUNTER:
-            return "F/R/S> "
         return "--> "
 
     def resume_events(self) -> list[Event]:

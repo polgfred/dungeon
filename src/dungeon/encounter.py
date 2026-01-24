@@ -60,6 +60,11 @@ class EncounterSession:
             Event.info("Encounter mode: F=Fight  R=Run  S=Spell"),
         ]
 
+    def prompt(self) -> str:
+        if self.awaiting_spell:
+            return "?> "
+        return "F/R/S> "
+
     def step(self, raw: str) -> EncounterResult:
         if self.awaiting_spell:
             return self._handle_spell_choice(raw)
