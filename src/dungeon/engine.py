@@ -106,6 +106,7 @@ def create_player(
         armor_tier=armor_tier,
         weapon_name=WEAPON_NAMES[weapon_tier],
         armor_name=ARMOR_NAMES[armor_tier],
+        armor_damaged=False,
         spells=spells,
     )
 
@@ -411,7 +412,7 @@ class Game:
             "lightning": self.player.spells.get(Spell.LIGHTNING, 0),
             "weaken": self.player.spells.get(Spell.WEAKEN, 0),
             "teleport": self.player.spells.get(Spell.TELEPORT, 0),
-            "armor": self.player.armor_name,
+            "armor": self._armor_display_name(),
             "weapon": self.player.weapon_name,
             "str": self.player.str_,
             "dex": self.player.dex,
@@ -482,15 +483,18 @@ class Game:
             return [Event.info("There is no chest here.")]
         room.feature = Feature.EMPTY
         roll = self.rng.randint(1, 5)
-        if roll == 1:
-            self.player.armor_tier = max(0, self.player.armor_tier - 1)
-            self.player.armor_name = ARMOR_NAMES[self.player.armor_tier]
-            return [Event.info("The perverse thing explodes, damaging your armor!")]
-        if roll == 2:
-            return [Event.info("It containeth naught.")]
-        gold = 10 + self.rng.randint(0, 20)
-        self.player.gold += gold
-        return [Event.info(f"You find {gold} gold pieces!")]
+        match roll:
+            case 1:
+                return [Event.info("It containeth naught.")]
+            case 2:
+                if self.player.armor_tier > 0:
+                    self.player.armor_tier -= 1
+                    self.player.armor_damaged = True
+                return [Event.info("The perverse thing explodes, damaging your armor!")]
+            case _:
+                gold = 10 + self.rng.randint(0, 20)
+                self.player.gold += gold
+                return [Event.info(f"You find {gold} gold pieces!")]
 
     def _read_scroll(self) -> list[Event]:
         room = self._current_room()
@@ -596,9 +600,8 @@ class Game:
         price = WEAPON_PRICES[tier]
         if self.player.gold < price:
             return [Event.info("Don't try to cheat me. It won't work!")]
-        if tier > self.player.weapon_tier:
-            self.player.weapon_tier = tier
-            self.player.weapon_name = WEAPON_NAMES[tier]
+        self.player.weapon_tier = tier
+        self.player.weapon_name = WEAPON_NAMES[tier]
         self.player.gold -= price
         self._shop_state = None
         return [Event.info("A fine weapon for your quest.")]
@@ -610,9 +613,9 @@ class Game:
         price = ARMOR_PRICES[tier]
         if self.player.gold < price:
             return [Event.info("Don't try to cheat me. It won't work!")]
-        if tier > self.player.armor_tier:
-            self.player.armor_tier = tier
-            self.player.armor_name = ARMOR_NAMES[tier]
+        self.player.armor_tier = tier
+        self.player.armor_name = ARMOR_NAMES[tier]
+        self.player.armor_damaged = False
         self.player.gold -= price
         self._shop_state = None
         return [Event.info("Armor fitted and ready.")]
@@ -722,7 +725,7 @@ class Game:
                 return events
             if self.rng.random() < 0.05 and self.player.weapon_tier > 0:
                 self.player.weapon_tier = 0
-                self.player.weapon_name = "~~broken"
+                self.player.weapon_name = "(Broken)"
                 events.append(Event.info("Your weapon breaks with the impact!"))
 
         events.extend(self._monster_attack())
@@ -811,6 +814,11 @@ class Game:
             "weaken": self.player.spells.get(Spell.WEAKEN, 0),
             "teleport": self.player.spells.get(Spell.TELEPORT, 0),
         }
+
+    def _armor_display_name(self) -> str:
+        if self.player.armor_damaged:
+            return f"{self.player.armor_name} (damaged)"
+        return self.player.armor_name
 
     def _cast_spell(self, spell: Spell) -> list[Event]:
         assert self.encounter is not None

@@ -38,6 +38,7 @@ class Player:
     armor_tier: int = 0
     weapon_name: str = "none"
     armor_name: str = "none"
+    armor_damaged: bool = False
 
     spells: dict[Spell, int] = field(default_factory=dict)
 
