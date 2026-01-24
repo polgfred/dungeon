@@ -14,13 +14,15 @@ from dungeon.types import Event
 def run() -> None:
     args = _parse_args()
     if args.continue_path:
-        if game := _load_game(Path(args.continue_path)):
-            _run_game(game, resume=True)
-        else:
+        game, events = _load_game(Path(args.continue_path))
+        if game is None:
+            _render_events(events)
             print("Unable to load saved game.")
+            return
+        _run_game(game, initial_events=game.resume_events())
     else:
         game = _setup_game()
-        _run_game(game, resume=False)
+        _run_game(game, initial_events=game.start_events())
 
 
 def _setup_game() -> Game:
@@ -105,37 +107,39 @@ def _render_events(events: list[Event]) -> None:
                     print(event.text)
 
 
-def _run_game(game: Game, *, resume: bool) -> None:
-    print()
-    if not resume:
-        print("The dungeon awaits you...")
-        _render_events(game.start_events())
-    else:
-        print("Game resumed.")
-        _render_events(game.resume_events())
-
+def _run_game(game: Game, *, initial_events: list[Event]) -> None:
+    last_events = initial_events
+    _render_turn(game, last_events)
     while True:
-        print()
         try:
             command = input(game.prompt())
         except (KeyboardInterrupt, EOFError):
-            print()
+            _clear_screen()
             print("Goodbye.")
             exit()
         if command.strip().startswith("/"):
-            if loaded_game := _handle_slash_command(command, game):
+            loaded_game, events = _handle_slash_command(command, game)
+            if loaded_game is not None:
                 game = loaded_game
-                print()
-                print("Game resumed.")
-                _render_events(game.resume_events())
+                last_events = game.resume_events()
+            else:
+                last_events = events
+            _render_turn(game, last_events)
             continue
         result = game.step(command)
-        _render_events(result.events)
+        last_events = result.events
+        _render_turn(game, last_events)
         if result.mode.name in {"GAME_OVER", "VICTORY"}:
             break
 
 
-def _handle_slash_command(command: str, game: Game) -> Game | None:
+def _render_turn(game: Game, events: list[Event]) -> None:
+    _clear_screen()
+    _render_events(game.status_events())
+    _render_events(events)
+
+
+def _handle_slash_command(command: str, game: Game) -> tuple[Game | None, list[Event]]:
     parts = command.strip().split(maxsplit=1)
     cmd = parts[0].lower()
     path = Path(parts[1]) if len(parts) > 1 else Path("game.sav")
@@ -144,30 +148,33 @@ def _handle_slash_command(command: str, game: Game) -> Game | None:
             try:
                 with path.open("wb") as handle:
                     pickle.dump(game, handle)
-                print(f"Game saved to {path}.")
+                return None, [Event.info(f"Game saved to {path}.")]
             except OSError as exc:
-                print(f"Save failed: {exc}.")
-            return
+                return None, [Event.error(f"Save failed: {exc}.")]
         case "/load":
-            if loaded_game := _load_game(path):
-                print(f"Game loaded from {path}.")
-                return loaded_game
-            return
-    print("Unknown command.")
+            loaded_game, events = _load_game(path)
+            if loaded_game is None:
+                return None, events
+            return loaded_game, [Event.info(f"Game loaded from {path}.")]
+    return None, [Event.error("Unknown command.")]
 
 
-def _load_game(path: Path) -> Game | None:
+def _load_game(path: Path) -> tuple[Game | None, list[Event]]:
     try:
         with path.open("rb") as handle:
             game = pickle.load(handle)
             if not isinstance(game, Game):
-                print("Save file did not contain a game.")
-                return
-            return game
+                return None, [Event.error("Save file did not contain a game.")]
+            return game, []
     except FileNotFoundError:
-        print(f"Save file not found: {path}.")
+        return None, [Event.error(f"Save file not found: {path}.")]
     except OSError as exc:
-        print(f"Load failed: {exc}.")
+        return None, [Event.error(f"Load failed: {exc}.")]
+    return None, [Event.error("Load failed.")]
+
+
+def _clear_screen() -> None:
+    print("\033c", end="")
 
 
 def _parse_args() -> argparse.Namespace:

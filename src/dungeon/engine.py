@@ -183,6 +183,9 @@ class Game:
     def prompt(self) -> str:
         return self._next_prompt([])
 
+    def status_events(self) -> list[Event]:
+        return [Event.status(self._status_data())]
+
     def _next_prompt(self, events: list[Event]) -> str:
         if any(event.kind == "PROMPT" for event in events):
             return "?> "
