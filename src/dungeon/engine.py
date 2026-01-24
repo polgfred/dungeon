@@ -196,7 +196,7 @@ class Game:
         return "--> "
 
     def resume_events(self) -> list[Event]:
-        events = [Event.status(self._status_data()), Event.map(self._map_grid())]
+        events = [Event.map(self._map_grid())]
         if self.mode == Mode.ENCOUNTER and self.encounter is not None:
             events.insert(
                 0,
@@ -238,8 +238,6 @@ class Game:
                 return self._drink_potion()
             case "B":
                 return self._open_vendor()
-            case "T":
-                return [Event.status(self._status_data())]
             case "H":
                 return [Event.info(self._help_text())]
             case _:
@@ -422,14 +420,13 @@ class Game:
     def _help_text(self) -> str:
         return (
             "COMMAND SUMMARY:\n"
-            "L=Look at a mirror  O=Open a chest   F=use a Flare  P=Drink a potion\n"
-            "R=Read a scroll     T=Status report  H=Help         M=Map\n"
-            "X=eXit              U=Up             D=Down         N=North\n"
-            "S=South             E=East           W=West         B=Buy\n"
+            "Move: N=North  S=South  E=East  W=West  U=Up  D=Down\n"
+            "Act:  L=Look  O=Open chest  R=Read scroll  P=Potion  F=Flare  B=Buy\n"
+            "Info: M=Map  H=Help  X=eXit\n"
             "\n"
             "Encounter: F=Fight  R=Run  S=Spell\n"
             "\n"
-            "MAP MEANINGS:\n"
+            "MAP LEGEND:\n"
             "0=Empty  m=Mirror  s=Scroll  c=Chest  f=Flares  p=Potion\n"
             "v=Vendor  t=Thief  w=Warp  U=Up  D=Down  X=eXit\n"
             "T=Treasure  M=Monster  *=You  ?=Unknown"

@@ -296,7 +296,7 @@ Responsibilities:
 - render `Event`s
 - prompt for command
 - in ENCOUNTER, show encounter prompt (Fight/Run/Spell) but still accept single-letter commands
-- status report shows stats (STR/DEX/IQ/HP), gold/treasures/flares, spell counts, and armor/weapon (with damaged tag)
+- status report is always displayed as part of the terminal UI
 - support `/save [path]` and `/load [path]` (pickle `Game`), plus `--continue [path]` on startup (default `game.sav`)
 
 ---

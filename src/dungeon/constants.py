@@ -55,7 +55,6 @@ EXPLORE_COMMANDS = {
     "R",
     "P",
     "B",
-    "T",
     "H",
 }
 ENCOUNTER_COMMANDS = {"F", "R", "S"}

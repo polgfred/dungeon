@@ -105,7 +105,9 @@ class Terminal:
         self._clear_screen()
         if self.game is not None:
             self._render_events(self.game.status_events())
+            print()
         self._render_events(events)
+        print()
 
     def _render_events(self, events: list[Event]) -> None:
         for event in events:
