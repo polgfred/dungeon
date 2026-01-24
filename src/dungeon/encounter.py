@@ -219,13 +219,17 @@ class EncounterSession:
         self.player.spells[spell] = charges - 1
         return self._cast_spell(spell)
 
-    def _spell_menu(self) -> dict[str, int]:
+    def _spell_menu(self) -> dict:
+        spells = self.player.spells
         return {
-            "protection": self.player.spells.get(Spell.PROTECTION, 0),
-            "fireball": self.player.spells.get(Spell.FIREBALL, 0),
-            "lightning": self.player.spells.get(Spell.LIGHTNING, 0),
-            "weaken": self.player.spells.get(Spell.WEAKEN, 0),
-            "teleport": self.player.spells.get(Spell.TELEPORT, 0),
+            "type": "spell",
+            "options": {
+                "protection": spells.get(Spell.PROTECTION, 0),
+                "fireball": spells.get(Spell.FIREBALL, 0),
+                "lightning": spells.get(Spell.LIGHTNING, 0),
+                "weaken": spells.get(Spell.WEAKEN, 0),
+                "teleport": spells.get(Spell.TELEPORT, 0),
+            },
         }
 
     def _cast_spell(self, spell: Spell) -> EncounterResult:

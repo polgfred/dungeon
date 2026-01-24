@@ -146,14 +146,17 @@ class Terminal:
                     print("--------------------------------------")
                 case "PROMPT":
                     print(event.text)
-                    if event.data:
-                        print(
-                            f"1> Protection {event.data['protection']}  "
-                            f"2> Fireball {event.data['fireball']}  "
-                            f"3> Lightning {event.data['lightning']}  "
-                            f"4> Weaken {event.data['weaken']}  "
-                            f"5> Teleport {event.data['teleport']}"
-                        )
+                    # May have different choices here in the future.
+                    match event.data["type"]:
+                        case "spell":
+                            options = event.data["options"]
+                            print(
+                                f"1> Protection {options['protection']}  "
+                                f"2> Fireball {options['fireball']}  "
+                                f"3> Lightning {options['lightning']}  "
+                                f"4> Weaken {options['weaken']}  "
+                                f"5> Teleport {options['teleport']}"
+                            )
                 case "INFO" | "ERROR" | "COMBAT" | "LOOT":
                     if event.text:
                         print(event.text)
