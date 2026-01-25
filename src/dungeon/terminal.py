@@ -7,7 +7,8 @@ import sys
 from pathlib import Path
 
 from dungeon.constants import Race
-from dungeon.engine import Game, create_player, roll_base_stats
+from dungeon.engine import Game
+from dungeon.model import Player
 from dungeon.types import Event
 
 
@@ -43,7 +44,7 @@ class Terminal:
         race = self._prompt_race()
 
         rng_state = rng.getstate()
-        base_str, base_dex, base_iq, base_hp = roll_base_stats(rng, race)
+        base_str, base_dex, base_iq, base_hp = Player.roll_base_stats(rng, race)
         print()
         print("Thy characteristics are as follows:")
         print(f" Strength     {base_str}")
@@ -69,7 +70,7 @@ class Terminal:
 
         # Replay RNG for deterministic starting state.
         rng.setstate(rng_state)
-        player = create_player(
+        player = Player.create(
             rng=rng,
             race=race,
             allocations=allocations,

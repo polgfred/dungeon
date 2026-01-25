@@ -1,12 +1,13 @@
 import random
 
 from dungeon.constants import Feature, Race
-from dungeon.engine import Game, create_player
+from dungeon.engine import Game
+from dungeon.model import Player
 
 
 def _make_game(seed: int) -> Game:
     rng = random.Random(seed)
-    player = create_player(
+    player = Player.create(
         rng=rng,
         race=Race.HUMAN,
         allocations={"STR": 2, "DEX": 2, "IQ": 1},

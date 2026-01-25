@@ -3,16 +3,11 @@ from __future__ import annotations
 import random
 
 from dungeon.constants import (
-    ARMOR_NAMES,
-    ARMOR_PRICES,
     EXPLORE_COMMANDS,
     FEATURE_SYMBOLS,
     TREASURE_NAMES,
-    WEAPON_NAMES,
-    WEAPON_PRICES,
     Feature,
     Mode,
-    Race,
     Spell,
 )
 from dungeon.encounter import EncounterSession
@@ -20,80 +15,6 @@ from dungeon.generation import generate_dungeon
 from dungeon.model import Player
 from dungeon.types import Event, StepResult
 from dungeon.vendor import VendorSession
-
-
-def roll_base_stats(rng: random.Random, race: Race) -> tuple[int, int, int, int]:
-    rn = rng.randint(0, 4)
-    rd = rng.randint(0, 4)
-    ra = rng.randint(0, 4)
-    r2 = rng.randint(0, 6)
-
-    match race:
-        case Race.HUMAN:
-            return 8 + rn, 8 + rd, 8 + ra, 20 + r2
-        case Race.DWARF:
-            return 10 + rn, 8 + rd, 6 + ra, 22 + r2
-        case Race.ELF:
-            return 6 + rn, 9 + rd, 10 + ra, 16 + r2
-        case Race.HALFLING:
-            return 6 + rn, 10 + rd, 9 + ra, 18 + r2
-        case _:
-            raise ValueError("Unknown race")
-
-
-def create_player(
-    rng: random.Random,
-    race: Race,
-    allocations: dict[str, int],
-    weapon_tier: int,
-    armor_tier: int,
-    flare_count: int,
-) -> Player:
-    str_, dex, iq, hp = roll_base_stats(rng, race)
-
-    str_add = int(allocations["STR"])
-    dex_add = int(allocations["DEX"])
-    iq_add = int(allocations["IQ"])
-    if min(str_add, dex_add, iq_add) < 0:
-        raise ValueError("Invalid allocation amount.")
-    if str_add + dex_add + iq_add != 5:
-        raise ValueError("Allocation must total 5 points.")
-    str_ = min(18, str_ + str_add)
-    dex = min(18, dex + dex_add)
-    iq = min(18, iq + iq_add)
-
-    gold = rng.randint(50, 60)
-    if weapon_tier not in (1, 2, 3):
-        raise ValueError("Weapon tier must be 1..3")
-    if armor_tier not in (1, 2, 3):
-        raise ValueError("Armor tier must be 1..3")
-    if flare_count < 0:
-        raise ValueError("Flare count must be non-negative")
-
-    cost = WEAPON_PRICES[weapon_tier] + ARMOR_PRICES[armor_tier] + flare_count
-    if cost > gold:
-        raise ValueError("Not enough gold for purchases")
-
-    spells = {spell: 0 for spell in Spell}
-
-    return Player(
-        z=0,
-        y=3,
-        x=3,
-        str_=str_,
-        dex=dex,
-        iq=iq,
-        hp=hp,
-        mhp=hp,
-        gold=gold - cost,
-        flares=flare_count,
-        weapon_tier=weapon_tier,
-        armor_tier=armor_tier,
-        weapon_name=WEAPON_NAMES[weapon_tier],
-        armor_name=ARMOR_NAMES[armor_tier],
-        armor_damaged=False,
-        spells=spells,
-    )
 
 
 class Game:
