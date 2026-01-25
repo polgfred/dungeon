@@ -149,7 +149,7 @@ class Terminal:
                 case "PROMPT":
                     print(event.text)
                     # May have different choices here in the future.
-                    match event.data["type"]:
+                    match event.data.get("type"):
                         case "spell":
                             options = event.data["options"]
                             print(
