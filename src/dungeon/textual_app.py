@@ -201,8 +201,8 @@ class DungeonTextualApp(App[None]):
                 [
                     "[b]Inventory[/b]",
                     f"Gold: {data['gold']}",
-                    f"Weapon: {data['weapon']}",
-                    f"Armor: {data['armor']}",
+                    f"Weapon: {data['weapon']}{'*' if game.player.weapon_broken else ''}",
+                    f"Armor: {data['armor']}{'*' if game.player.armor_damaged else ''}",
                     f"Flares: {data['flares']}",
                     f"Treasures: {data['treasures']}/10",
                     "",
@@ -308,8 +308,7 @@ class DungeonTextualApp(App[None]):
             can_run = not game.player.fatigued
             return (
                 "[b]Encounter[/b]  "
-                f"{cmd('F Fight')}   {cmd('R Run', can_run)}   {cmd('S Spell')}   "
-                "Esc Cancel"
+                f"{cmd('F Fight')}   {cmd('R Run', can_run)}   {cmd('S Spell')}"
             )
         room = game.dungeon.rooms[game.player.z][game.player.y][game.player.x]
         can_up = room.feature == Feature.STAIRS_UP
@@ -327,8 +326,7 @@ class DungeonTextualApp(App[None]):
             f"{cmd('F Flare', can_flare)}   {cmd('X Exit', can_exit)}   "
             f"{cmd('L Mirror', can_mirror)}   {cmd('O Open', can_open)}   "
             f"{cmd('R Read', can_read)}   {cmd('P Potion', can_potion)}   "
-            f"{cmd('B Buy', can_buy)}   {cmd('H Help')}   "
-            "Esc Cancel"
+            f"{cmd('B Buy', can_buy)}   {cmd('H Help')}"
         )
 
     def _load_game(self, path: Path) -> tuple[Game | None, list[Event]]:
