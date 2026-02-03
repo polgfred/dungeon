@@ -191,7 +191,9 @@ class DungeonTextualApp(App[None]):
                     f"{game.mode.name.title()}",
                     "",
                     "[b]Stats[/b]",
-                    f"STR {data['str']:>2}   DEX {data['dex']:>2}   IQ {data['iq']:>2}",
+                    f"STR {data['str']:>2}",
+                    f"DEX {data['dex']:>2}",
+                    f"IQ {data['iq']:>2}",
                     hp_line,
                 ]
             )
@@ -205,9 +207,6 @@ class DungeonTextualApp(App[None]):
                     f"Armor: {data['armor']}{'*' if game.player.armor_damaged else ''}",
                     f"Flares: {data['flares']}",
                     f"Treasures: {data['treasures']}/10",
-                    "",
-                    f"Spells: P {data['protection']}  F {data['fireball']}  "
-                    f"L {data['lightning']}  W {data['weaken']}  T {data['teleport']}",
                 ]
             )
         )
