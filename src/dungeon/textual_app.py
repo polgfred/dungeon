@@ -24,7 +24,7 @@ def _create_default_game(*, seed: int, debug: bool) -> Game:
         allocations={"STR": 2, "DEX": 2, "IQ": 1},
         weapon_tier=1,
         armor_tier=1,
-        flare_count=0,
+        flare_count=5,
     )
     return Game(seed=seed, player=player, rng=rng, debug=debug)
 
