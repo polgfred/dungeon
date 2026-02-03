@@ -49,7 +49,7 @@ class DungeonTextualApp(App[None]):
         min-width: 30;
     }
     #map {
-        height: 12;
+        height: 10;
         border: solid #2f5f96;
         background: #12365f;
         padding: 0 1;
