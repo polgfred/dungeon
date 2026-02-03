@@ -7,9 +7,10 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Footer, Header, Input, RichLog, Static
+from textual.events import Key
+from textual.widgets import Footer, Header, RichLog, Static
 
-from dungeon.constants import Mode, Race
+from dungeon.constants import FEATURE_SYMBOLS, Feature, Mode, Race
 from dungeon.engine import Game
 from dungeon.model import Player
 from dungeon.types import Event
@@ -67,10 +68,7 @@ class DungeonTextualApp(App[None]):
         padding: 0 1;
     }
     #command-input {
-        margin-top: 1;
-        border: round #2f5f96;
-        background: #0c2443;
-        color: #e8f2ff;
+        display: none;
     }
     #stats, #inventory, #meta {
         border: round #2f5f96;
@@ -86,7 +84,12 @@ class DungeonTextualApp(App[None]):
     }
     """
 
-    BINDINGS = [("ctrl+c", "quit", "Quit")]
+    BINDINGS = [
+        ("ctrl+q", "quit", "Quit"),
+        ("ctrl+c", "quit", "Quit"),
+        ("ctrl+s", "save", "Save"),
+        ("ctrl+l", "load", "Load"),
+    ]
 
     def __init__(
         self,
@@ -112,7 +115,6 @@ class DungeonTextualApp(App[None]):
                 yield Static("", id="map")
                 yield RichLog(id="event-log", markup=True, wrap=True, highlight=False)
                 yield Static("", id="prompt-help")
-                yield Input(placeholder="Type a command (N/S/E/W/etc.)", id="command-input")
             with Vertical(id="right-pane"):
                 yield Static("", id="stats")
                 yield Static("", id="inventory")
@@ -120,7 +122,7 @@ class DungeonTextualApp(App[None]):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.title = "Dungeon of Doom (Textual Spike)"
+        self.title = "Dungeon of Doom"
         if self.continue_path:
             game, events = self._load_game(Path(self.continue_path))
             if game is None:
@@ -137,43 +139,41 @@ class DungeonTextualApp(App[None]):
             self.game = _create_default_game(seed=self.seed, debug=self.debug_mode)
             self._append_events(self.game.start_events())
         self._refresh_panels()
-        self._focus_input()
 
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        command = event.value.strip()
-        event.input.value = ""
-        if not command:
-            return
+    def on_key(self, event: Key) -> None:
         game = self.game
         if game is None:
             return
-        if command.startswith("/"):
-            loaded_game, events = self._handle_slash_command(command, game)
-            if loaded_game is not None:
-                self.game = loaded_game
-                game = loaded_game
-                self._append_events(game.resume_events())
-            else:
-                self._append_events(events)
+        key = event.key.lower()
+        arrow_to_move = {
+            "up": "N",
+            "down": "S",
+            "left": "W",
+            "right": "E",
+        }
+        if key in arrow_to_move:
+            result = game.step(arrow_to_move[key])
+            self._append_events(result.events)
             self._refresh_panels()
             return
-        if command in {"\x1b", "ESC", "esc"}:
+        if key == "escape":
             result = game.attempt_cancel()
-        else:
-            result = game.step(command)
+            self._append_events(result.events)
+            self._refresh_panels()
+            return
+        if len(key) != 1:
+            return
+        result = game.step(key.upper())
         self._append_events(result.events)
         self._refresh_panels()
-        if result.mode in {Mode.GAME_OVER, Mode.VICTORY}:
-            self._disable_input()
 
     def _refresh_panels(self) -> None:
         game = self.game
         if game is None:
             return
-        self.query_one("#map", Static).update(self._render_map(game._map_grid()))
+        self.query_one("#map", Static).update(self._render_map(game))
         self._render_stats()
         self._render_prompt_help()
-        self._update_input_placeholder()
 
     def _render_stats(self) -> None:
         game = self.game
@@ -181,6 +181,9 @@ class DungeonTextualApp(App[None]):
             return
         status_event = game.status_events()[0]
         data = status_event.data
+        hp_line = f"HP {data['hp']}/{data['mhp']}"
+        if int(data["hp"]) < 10:
+            hp_line = f"[bold #ff8f8f]{hp_line}[/]"
         self.query_one("#stats", Static).update(
             "\n".join(
                 [
@@ -189,7 +192,7 @@ class DungeonTextualApp(App[None]):
                     "",
                     "[b]Stats[/b]",
                     f"STR {data['str']:>2}   DEX {data['dex']:>2}   IQ {data['iq']:>2}",
-                    f"HP {data['hp']}/{data['mhp']}",
+                    hp_line,
                 ]
             )
         )
@@ -203,9 +206,8 @@ class DungeonTextualApp(App[None]):
                     f"Flares: {data['flares']}",
                     f"Treasures: {data['treasures']}/10",
                     "",
-                    "[b]Spells[/b]",
-                    f"P {data['protection']}  F {data['fireball']}  L {data['lightning']}",
-                    f"W {data['weaken']}  T {data['teleport']}",
+                    f"Spells: P {data['protection']}  F {data['fireball']}  "
+                    f"L {data['lightning']}  W {data['weaken']}  T {data['teleport']}",
                 ]
             )
         )
@@ -214,16 +216,33 @@ class DungeonTextualApp(App[None]):
                 [
                     "[b]Location[/b]",
                     f"Floor {game.player.z + 1} · Room {game.player.y + 1},{game.player.x + 1}",
-                    "",
-                    "[dim]Tip: use command letters or Esc to cancel.[/dim]",
-                    "[dim]/save [path], /load [path], and /quit are available.[/dim]",
                 ]
             )
         )
 
-    def _render_map(self, grid: list[str]) -> str:
+    def _render_map(self, game: Game) -> str:
         lines = ["[b]Dungeon Map[/b]"]
-        lines.extend(grid)
+        for y in range(game.SIZE):
+            cells: list[str] = []
+            for x in range(game.SIZE):
+                room = game.dungeon.rooms[game.player.z][y][x]
+                if not room.seen:
+                    symbol = "·"
+                    display = "[#7e95b5]·[/]"
+                elif room.monster_level > 0:
+                    symbol = "M"
+                    display = symbol
+                elif room.treasure_id:
+                    symbol = "T"
+                    display = symbol
+                else:
+                    symbol = FEATURE_SYMBOLS.get(room.feature, "-")
+                    display = symbol
+                if y == game.player.y and x == game.player.x:
+                    cells.append(f"[reverse]{symbol}[/reverse]")
+                else:
+                    cells.append(display)
+            lines.append("  ".join(cells))
         return "\n".join(lines)
 
     def _render_prompt_help(self) -> None:
@@ -231,54 +250,47 @@ class DungeonTextualApp(App[None]):
             text = self._default_command_help()
             self.query_one("#prompt-help", Static).update(text)
             return
-        lines = [f"[b]{self._prompt_text or 'Choose:'}[/b]"]
+        header = f"[b]{self._prompt_text or 'Choose:'}[/b]"
+        options_inline: list[str] = []
         for option in self._prompt_options:
             key = option.get("key", "?")
             label = option.get("label", "")
             disabled = option.get("disabled")
-            suffix = " (unavailable)" if disabled else ""
-            lines.append(f"{key}  {label}{suffix}")
+            if disabled:
+                options_inline.append(f"[dim]{key} {label}[/dim]")
+            else:
+                options_inline.append(f"{key} {label}")
         if self._prompt_has_cancel:
-            lines.append("Esc  Cancel")
-        self.query_one("#prompt-help", Static).update("\n".join(lines))
-
-    def _update_input_placeholder(self) -> None:
-        game = self.game
-        if game is None:
-            return
-        prompt = game.prompt().strip()
-        self.query_one("#command-input", Input).placeholder = (
-            f"{prompt} enter command"
-        )
+            options_inline.append("Esc Cancel")
+        if options_inline:
+            text = f"{header}  " + "   ".join(options_inline)
+        else:
+            text = header
+        self.query_one("#prompt-help", Static).update(text)
 
     def _append_events(self, events: list[Event]) -> None:
         log = self.query_one("#event-log", RichLog)
+        wrote_log_entry = False
         for event in events:
             match event.kind:
                 case "INFO":
                     log.write(f"[#cfe3fa]• {event.text}[/]")
+                    wrote_log_entry = True
                 case "ERROR":
                     log.write(f"[bold #ff8f8f]• {event.text}[/]")
+                    wrote_log_entry = True
                 case "COMBAT":
                     log.write(f"[bold #ffe4a0]• {event.text}[/]")
+                    wrote_log_entry = True
                 case "LOOT":
                     log.write(f"[bold #9cffbc]• {event.text}[/]")
-                case "DEBUG":
-                    if self.debug_mode and event.text:
-                        log.write(f"[dim]{event.text}[/]")
+                    wrote_log_entry = True
                 case "PROMPT":
                     self._prompt_text = event.text
                     self._prompt_options = list(event.data.get("options", []))
                     self._prompt_has_cancel = bool(event.data.get("hasCancel"))
-                case "MAP":
-                    pass
-                case "STATUS":
-                    pass
-                case _:
-                    if event.text:
-                        log.write(event.text)
-            if event.kind in {"INFO", "ERROR", "COMBAT", "LOOT"}:
-                log.write("")
+        if wrote_log_entry:
+            log.write("")
         if not any(e.kind == "PROMPT" for e in events):
             self._prompt_text = ""
             self._prompt_options = []
@@ -287,50 +299,37 @@ class DungeonTextualApp(App[None]):
     def _default_command_help(self) -> str:
         game = self.game
         if game is None:
-            return "[b]Commands[/b]\nN S E W U D M F X L O R P B H"
-        if game.mode == Mode.ENCOUNTER:
-            return "\n".join(
-                [
-                    "[b]Encounter Commands[/b]",
-                    "F  Fight",
-                    "R  Run",
-                    "S  Spell",
-                    "Esc  Cancel spell choice",
-                ]
-            )
-        return "\n".join(
-            [
-                "[b]Explore Commands[/b]",
-                "N/S/E/W Move   U/D Stairs   M Map",
-                "F Flare   X Exit   L Mirror",
-                "O Open chest   R Read scroll   P Potion",
-                "B Buy   H Help",
-            ]
-        )
+            return "[b]Commands[/b] N S E W U D F X L O R P B H · Esc"
 
-    def _handle_slash_command(
-        self, command: str, game: Game
-    ) -> tuple[Game | None, list[Event]]:
-        parts = command.strip().split(maxsplit=1)
-        cmd = parts[0].lower()
-        path = Path(parts[1]) if len(parts) > 1 else Path(self.default_save)
-        match cmd:
-            case "/save":
-                try:
-                    with path.open("wb") as handle:
-                        pickle.dump(game, handle)
-                    return None, [Event.info(f"Game saved to {path}.")]
-                except OSError as exc:
-                    return None, [Event.error(f"Save failed: {exc}.")]
-            case "/load":
-                loaded_game, events = self._load_game(path)
-                if loaded_game is None:
-                    return None, events
-                return loaded_game, [Event.info(f"Game loaded from {path}.")]
-            case "/quit" | "/q":
-                self.exit()
-                return None, []
-        return None, [Event.error("Unknown command.")]
+        def cmd(text: str, enabled: bool = True) -> str:
+            return text if enabled else f"[dim]{text}[/dim]"
+
+        if game.mode == Mode.ENCOUNTER:
+            can_run = not game.player.fatigued
+            return (
+                "[b]Encounter[/b]  "
+                f"{cmd('F Fight')}   {cmd('R Run', can_run)}   {cmd('S Spell')}   "
+                "Esc Cancel"
+            )
+        room = game.dungeon.rooms[game.player.z][game.player.y][game.player.x]
+        can_up = room.feature == Feature.STAIRS_UP
+        can_down = room.feature == Feature.STAIRS_DOWN
+        can_flare = game.player.flares > 0
+        can_exit = room.feature == Feature.EXIT
+        can_mirror = room.feature == Feature.MIRROR
+        can_open = room.feature == Feature.CHEST
+        can_read = room.feature == Feature.SCROLL
+        can_potion = room.feature == Feature.POTION
+        can_buy = room.feature == Feature.VENDOR
+        return (
+            "[b]Explore[/b]  "
+            f"{cmd('N S E W Move')}   {cmd('U Up', can_up)}   {cmd('D Down', can_down)}   "
+            f"{cmd('F Flare', can_flare)}   {cmd('X Exit', can_exit)}   "
+            f"{cmd('L Mirror', can_mirror)}   {cmd('O Open', can_open)}   "
+            f"{cmd('R Read', can_read)}   {cmd('P Potion', can_potion)}   "
+            f"{cmd('B Buy', can_buy)}   {cmd('H Help')}   "
+            "Esc Cancel"
+        )
 
     def _load_game(self, path: Path) -> tuple[Game | None, list[Event]]:
         try:
@@ -339,7 +338,9 @@ class DungeonTextualApp(App[None]):
                 if not isinstance(game, Game):
                     return None, [Event.error("Save file did not contain a game.")]
                 if getattr(game, "save_version", None) != Game.SAVE_VERSION:
-                    return None, [Event.error("Save file is incompatible with this version.")]
+                    return None, [
+                        Event.error("Save file is incompatible with this version.")
+                    ]
                 game.debug = self.debug_mode
                 if game._encounter_session:
                     game._encounter_session.debug = self.debug_mode
@@ -351,13 +352,30 @@ class DungeonTextualApp(App[None]):
         except Exception as exc:
             return None, [Event.error(f"Load failed: {exc.__class__.__name__}: {exc}.")]
 
-    def _focus_input(self) -> None:
-        self.query_one("#command-input", Input).focus()
+    def action_save(self) -> None:
+        game = self.game
+        if game is None:
+            return
+        path = Path(self.default_save)
+        try:
+            with path.open("wb") as handle:
+                pickle.dump(game, handle)
+            self._append_events([Event.info(f"Game saved to {path}.")])
+        except OSError as exc:
+            self._append_events([Event.error(f"Save failed: {exc}.")])
+        self._refresh_panels()
 
-    def _disable_input(self) -> None:
-        input_widget = self.query_one("#command-input", Input)
-        input_widget.disabled = True
-        input_widget.placeholder = "Game over. Press Ctrl+C to exit."
+    def action_load(self) -> None:
+        path = Path(self.default_save)
+        loaded_game, events = self._load_game(path)
+        if loaded_game is None:
+            self._append_events(events)
+            self._refresh_panels()
+            return
+        self.game = loaded_game
+        self._append_events([Event.info(f"Game loaded from {path}.")])
+        self._append_events(loaded_game.resume_events())
+        self._refresh_panels()
 
 
 def run() -> None:

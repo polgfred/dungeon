@@ -47,7 +47,6 @@ EXPLORE_COMMANDS = {
     "W",
     "U",
     "D",
-    "M",
     "F",
     "X",
     "L",

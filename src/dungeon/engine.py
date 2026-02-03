@@ -192,8 +192,6 @@ class Game:
                 return self._stairs_up()
             case "D":
                 return self._stairs_down()
-            case "M":
-                return [Event.map(self._map_grid())]
             case "F":
                 return self._use_flare()
             case "X":
@@ -392,7 +390,7 @@ class Game:
             "COMMAND SUMMARY:\n"
             "Move: N=North  S=South  E=East  W=West  U=Up  D=Down\n"
             "Act:  L=Look  O=Open chest  R=Read scroll  P=Potion  F=Flare  B=Buy\n"
-            "Info: M=Map  H=Help  X=eXit\n"
+            "Info: H=Help  X=eXit\n"
             "\n"
             "Encounter: F=Fight  R=Run  S=Spell\n"
             "\n"
