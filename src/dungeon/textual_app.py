@@ -50,20 +50,20 @@ class DungeonTextualApp(App[None]):
     }
     #map {
         height: 12;
-        border: round #2f5f96;
+        border: solid #2f5f96;
         background: #12365f;
         padding: 0 1;
     }
     #event-log {
         height: 1fr;
-        border: round #2f5f96;
+        border: solid #2f5f96;
         background: #0a203d;
         color: #cfe3fa;
         padding: 0 1;
     }
     #prompt-help {
         height: auto;
-        border: round #2f5f96;
+        border: solid #2f5f96;
         background: #1e4c81;
         padding: 0 1;
     }
@@ -71,7 +71,7 @@ class DungeonTextualApp(App[None]):
         display: none;
     }
     #stats, #inventory, #meta {
-        border: round #2f5f96;
+        border: solid #2f5f96;
         background: #254f82;
         color: #d4e5f7;
         padding: 0 1;
