@@ -10,23 +10,23 @@ _SIZE = 7
 
 def generate_dungeon(rng: random.Random) -> Dungeon:
     rooms = [
-        [[_create_room(rng) for _x in range(_SIZE)] for _y in range(_SIZE)]
-        for _z in range(_SIZE)
+        [[_create_room(rng, z) for _x in range(_SIZE)] for _y in range(_SIZE)]
+        for z in range(_SIZE)
     ]
-
     _place_treasures(rng, rooms)
     _place_stairs(rng, rooms)
     _place_exit(rng, rooms)
-
     return Dungeon(rooms=rooms)
 
 
-def _create_room(rng: random.Random) -> Room:
+def _create_room(rng: random.Random, floor: int) -> Room:
     room = Room()
     if rng.random() > 0.3:
         roll = rng.randint(1, 10)
         if roll > 8:
-            room.monster_level = rng.randint(1, 10)
+            min_level = floor + 1
+            max_level = min(10, min_level + 5)
+            room.monster_level = rng.randint(min_level, max_level)
         else:
             room.feature = Feature(roll)
     return room
@@ -40,6 +40,8 @@ def _place_treasures(rng: random.Random, rooms: list[list[list[Room]]]) -> None:
         x = rng.randrange(_SIZE)
         room = rooms[z][y][x]
         if room.treasure_id != 0:
+            continue
+        if room.feature != Feature.EMPTY:
             continue
         placed += 1
         room.treasure_id = placed
@@ -77,33 +79,57 @@ def _place_exit(rng: random.Random, rooms: list[list[list[Room]]]) -> None:
         break
 
 
-def validate_dungeon(d: Dungeon) -> list[str]:
+def validate_dungeon(dungeon: Dungeon) -> list[str]:
     errors: list[str] = []
-    if len(d.rooms) != _SIZE:
-        errors.append("Dungeon has incorrect number of floors.")
-        return errors
+    if len(dungeon.rooms) != _SIZE:
+        return ["Dungeon has incorrect number of floors."]
 
     exit_count = 0
     treasure_count = 0
+    stairs_up_counts = [0] * _SIZE
+    stairs_down_counts = [0] * _SIZE
+
     for z in range(_SIZE):
         for y in range(_SIZE):
-            if len(d.rooms[z][y]) != _SIZE:
+            if len(dungeon.rooms[z][y]) != _SIZE:
                 errors.append(f"Row size mismatch on floor {z}.")
             for x in range(_SIZE):
-                room = d.rooms[z][y][x]
+                room = dungeon.rooms[z][y][x]
                 if room.feature == Feature.EXIT:
                     if z != _SIZE - 1:
                         errors.append("Exit placed on non-final floor.")
                     exit_count += 1
                 if room.treasure_id:
                     treasure_count += 1
+                    if room.feature != Feature.EMPTY:
+                        errors.append("Treasure placed in non-empty room.")
+                if room.monster_level > 0 and room.feature != Feature.EMPTY:
+                    errors.append("Monster placed in room with feature.")
                 if room.feature == Feature.STAIRS_UP:
+                    stairs_up_counts[z] += 1
                     if z == _SIZE - 1:
                         errors.append("Stairs up on final floor.")
-                    else:
-                        below = d.rooms[z + 1][y][x]
-                        if below.feature != Feature.STAIRS_DOWN:
-                            errors.append("Stair alignment mismatch.")
+                    elif dungeon.rooms[z + 1][y][x].feature != Feature.STAIRS_DOWN:
+                        errors.append("Stair alignment mismatch.")
+                if room.feature == Feature.STAIRS_DOWN:
+                    stairs_down_counts[z] += 1
+                    if z == 0:
+                        errors.append("Stairs down on first floor.")
+                    elif dungeon.rooms[z - 1][y][x].feature != Feature.STAIRS_UP:
+                        errors.append("Stair alignment mismatch.")
+                if room.feature in {Feature.EXIT, Feature.STAIRS_UP, Feature.STAIRS_DOWN}:
+                    if room.monster_level > 0 or room.treasure_id > 0:
+                        errors.append("Feature placed in room with monster or treasure.")
+
+    for z in range(_SIZE):
+        if z < _SIZE - 1 and stairs_up_counts[z] != 1:
+            errors.append("Floor must contain exactly one staircase up.")
+        if z == _SIZE - 1 and stairs_up_counts[z] != 0:
+            errors.append("Final floor must not contain staircase up.")
+        if z > 0 and stairs_down_counts[z] != 1:
+            errors.append("Floor must contain exactly one staircase down.")
+        if z == 0 and stairs_down_counts[z] != 0:
+            errors.append("First floor must not contain staircase down.")
 
     if exit_count != 1:
         errors.append("Dungeon must contain exactly one exit.")

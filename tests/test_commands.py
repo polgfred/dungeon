@@ -38,8 +38,10 @@ def test_treasure_awarded_on_kill():
     assert 1 not in game.player.treasures_found
     session = game._encounter_session
     assert session is not None
-    session.vitality = 0
-    session._handle_monster_death([])
+    session.vitality = 1
+    session.rng.random = lambda: 0.0
+    session.rng.randint = lambda _a, _b: 1
+    game.step("F")
     assert 1 in game.player.treasures_found
 
 

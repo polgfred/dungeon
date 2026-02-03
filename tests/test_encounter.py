@@ -40,7 +40,7 @@ def test_run_success_relocates():
     events = result.events
     assert game.mode == Mode.EXPLORE
     assert (game.player.z, game.player.y, game.player.x) != start
-    assert any("slip away" in e.text for e in events)
+    assert any("turn and flee" in e.text.lower() for e in events)
 
 
 def test_run_fail_sets_fatigued():
@@ -56,29 +56,15 @@ def test_run_fail_sets_fatigued():
     assert any("escape" in e.text for e in events)
 
 
-def test_final_attack_death_ends_game_without_loot():
+def test_spell_prompt_uses_letter_commands():
     game = _make_game(3)
-    room = game.dungeon.rooms[game.player.z][game.player.y][game.player.x]
+    room = game._current_room()
     room.monster_level = 1
-    room.treasure_id = 1
     game._enter_room()
 
-    session = game._encounter_session
-    assert session is not None
-    session.rng.random = lambda: 0.99
-
-    def _fatal_attack():
-        session.player.hp = 0
-        return [], Mode.GAME_OVER
-
-    session._monster_attack = _fatal_attack
-    result = session._handle_monster_death([])
-    events = result.events
-
-    assert result.mode == Mode.GAME_OVER
-    assert session.vitality == 0
-    assert room.monster_level == 0
-    assert 1 not in game.player.treasures_found
-    assert not any(
-        e.text and ("You found" in e.text or "You find" in e.text) for e in events
-    )
+    result = game.step("S")
+    prompt = next((e for e in result.events if e.kind == "PROMPT"), None)
+    assert prompt is not None
+    assert prompt.data["hasCancel"] is True
+    keys = [opt["key"] for opt in prompt.data["options"]]
+    assert keys == ["P", "F", "L", "W", "T"]

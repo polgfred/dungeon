@@ -29,8 +29,21 @@ class Event:
         return cls("LOOT", text)
 
     @classmethod
-    def prompt(cls, text: str, *, data: dict[str, Any] | None = None) -> "Event":
-        return cls("PROMPT", text, data or {})
+    def prompt(
+        cls,
+        text: str,
+        *,
+        options: list[dict[str, Any]],
+        has_cancel: bool = True,
+        prompt_type: str | None = None,
+    ) -> "Event":
+        data: dict[str, Any] = {
+            "options": options,
+            "hasCancel": has_cancel,
+        }
+        if prompt_type is not None:
+            data["type"] = prompt_type
+        return cls("PROMPT", text, data)
 
     @classmethod
     def status(cls, data: dict[str, Any]) -> "Event":

@@ -33,3 +33,18 @@ def test_vendor_entry_no_prompt():
     events = game._enter_room()
     assert game._shop_session is None
     assert any("vendor" in e.text.lower() for e in events)
+
+
+def test_vendor_starts_session_with_letter_prompt():
+    game = _make_game(10)
+    room = game._current_room()
+    room.feature = Feature.VENDOR
+    game._enter_room()
+
+    result = game.step("B")
+
+    assert game._shop_session is not None
+    prompt = next((e for e in result.events if e.kind == "PROMPT"), None)
+    assert prompt is not None
+    keys = [opt["key"] for opt in prompt.data["options"]]
+    assert keys == ["W", "A", "S", "P", "F"]

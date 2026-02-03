@@ -103,6 +103,13 @@ class Terminal:
                     last_events = events
                 self._render_turn(last_events)
                 continue
+            if command.strip() in {"\x1b", "ESC", "esc"}:
+                result = game.attempt_cancel()
+                last_events = result.events
+                self._render_turn(last_events)
+                if result.mode.name in {"GAME_OVER", "VICTORY"}:
+                    break
+                continue
             result = game.step(command)
             last_events = result.events
             self._render_turn(last_events)
@@ -149,17 +156,11 @@ class Terminal:
                     print("--------------------------------------")
                 case "PROMPT":
                     print(event.text)
-                    # May have different choices here in the future.
-                    match event.data.get("type"):
-                        case "spell":
-                            options = event.data["options"]
-                            print(
-                                f"1> Protection {options['protection']}  "
-                                f"2> Fireball {options['fireball']}  "
-                                f"3> Lightning {options['lightning']}  "
-                                f"4> Weaken {options['weaken']}  "
-                                f"5> Teleport {options['teleport']}"
-                            )
+                    for option in event.data.get("options", []):
+                        suffix = " (unavailable)" if option.get("disabled") else ""
+                        print(f"  {option.get('key')}> {option.get('label')}{suffix}")
+                    if event.data.get("hasCancel"):
+                        print("  Esc> Cancel")
                 case "INFO" | "ERROR" | "COMBAT" | "LOOT":
                     if event.text:
                         print(event.text)

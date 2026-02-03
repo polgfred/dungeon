@@ -5,6 +5,10 @@ from dataclasses import dataclass, field
 from dungeon.constants import Feature, Race, Spell
 
 
+def create_spell_counts() -> dict[Spell, int]:
+    return {spell: 0 for spell in Spell}
+
+
 @dataclass
 class Room:
     feature: Feature = Feature.EMPTY
@@ -24,6 +28,8 @@ class Player:
     y: int
     x: int
 
+    race: Race
+
     str_: int
     dex: int
     iq: int
@@ -37,15 +43,14 @@ class Player:
     weapon_tier: int = 0
     armor_tier: int = 0
     weapon_name: str = "none"
+    weapon_broken: bool = False
     armor_name: str = "none"
     armor_damaged: bool = False
 
-    spells: dict[Spell, int] = field(default_factory=dict)
+    spells: dict[Spell, int] = field(default_factory=create_spell_counts)
 
     fatigued: bool = False
     temp_armor_bonus: int = 0
-
-    attr_potion_target: str | None = None
 
     @staticmethod
     def roll_base_stats(rng, race: Race) -> tuple[int, int, int, int]:
@@ -109,12 +114,11 @@ class Player:
         if cost > gold:
             raise ValueError("Not enough gold for purchases")
 
-        spells = {spell: 0 for spell in Spell}
-
         return cls(
             z=0,
             y=3,
             x=3,
+            race=race,
             str_=str_,
             dex=dex,
             iq=iq,
@@ -125,9 +129,10 @@ class Player:
             weapon_tier=weapon_tier,
             armor_tier=armor_tier,
             weapon_name=WEAPON_NAMES[weapon_tier],
+            weapon_broken=False,
             armor_name=ARMOR_NAMES[armor_tier],
             armor_damaged=False,
-            spells=spells,
+            spells=create_spell_counts(),
         )
 
     def apply_attribute_change(

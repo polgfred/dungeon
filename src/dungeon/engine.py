@@ -3,8 +3,10 @@ from __future__ import annotations
 import random
 
 from dungeon.constants import (
+    ARMOR_NAMES,
     EXPLORE_COMMANDS,
     FEATURE_SYMBOLS,
+    MONSTER_NAMES,
     TREASURE_NAMES,
     Feature,
     Mode,
@@ -13,8 +15,14 @@ from dungeon.constants import (
 from dungeon.encounter import EncounterSession
 from dungeon.generation import generate_dungeon
 from dungeon.model import Player
+from dungeon.potions import drink_attribute_potion_events, drink_healing_potion_events
 from dungeon.types import Event, StepResult
 from dungeon.vendor import VendorSession
+
+
+def _pluralize(count: int, singular: str, plural: str | None = None) -> str:
+    suffix = plural if plural is not None else f"{singular}s"
+    return singular if count == 1 else suffix
 
 
 class Game:
@@ -28,21 +36,28 @@ class Game:
         player: Player,
         rng: random.Random | None = None,
         debug: bool = False,
-    ):
+    ) -> None:
         self.save_version = self.SAVE_VERSION
         self.rng = rng or random.Random(seed)
         self.player = player
         self.dungeon = generate_dungeon(self.rng)
-        self.mode = Mode.EXPLORE
+        self._end_mode: Mode | None = None
         self._encounter_session: EncounterSession | None = None
         self._shop_session: VendorSession | None = None
         self.debug = debug
+
+    @property
+    def mode(self) -> Mode:
+        if self._end_mode is not None:
+            return self._end_mode
+        if self._encounter_session is not None:
+            return Mode.ENCOUNTER
+        return Mode.EXPLORE
 
     def start_events(self) -> list[Event]:
         return self._enter_room()
 
     def step(self, command: str) -> StepResult:
-        events: list[Event] = []
         raw = command.strip().upper()
         if not raw:
             return StepResult(
@@ -50,63 +65,89 @@ class Game:
                 mode=self.mode,
                 needs_input=True,
             )
-
-        # Terminal conditions short-circuit the loop.
         if self.mode in {Mode.GAME_OVER, Mode.VICTORY}:
             return StepResult(
-                events=[],
+                events=[Event.error("I don't understand that.")],
                 mode=self.mode,
                 needs_input=False,
             )
 
-        # Session delegation for vendor and encounter flows.
         if self._shop_session:
             result = self._shop_session.step(raw)
-            events.extend(result.events)
             if result.done:
                 self._shop_session = None
-            return StepResult(
-                events=events,
-                mode=self.mode,
-                needs_input=True,
-            )
+            return StepResult(events=result.events, mode=self.mode, needs_input=True)
 
         if self._encounter_session:
             result = self._encounter_session.step(raw)
-            events.extend(result.events)
-            if result.mode != Mode.ENCOUNTER:
+            events = result.events
+            if result.done:
                 self._encounter_session = None
-            self.mode = result.mode
-            # Follow-up relocation for run/teleport outcomes.
-            if result.relocate:
-                self._random_relocate(any_floor=result.relocate_any_floor)
-                if result.enter_room:
-                    events.extend(self._enter_room())
-            return StepResult(
-                events=events,
-                mode=self.mode,
-                needs_input=self.mode not in {Mode.GAME_OVER, Mode.VICTORY},
-            )
+                if result.defeated_monster:
+                    room = self._current_room()
+                    monster_level = room.monster_level
+                    room.monster_level = 0
+                    if self.player.hp > 0:
+                        if room.treasure_id:
+                            events.extend(self._award_treasure(room.treasure_id))
+                            room.treasure_id = 0
+                        else:
+                            gold = 5 * monster_level + self.rng.randint(0, 20)
+                            self.player.gold += gold
+                            events.append(
+                                Event.loot(
+                                    f"You find {gold} gold {_pluralize(gold, 'piece')}."
+                                )
+                            )
+                if result.relocate:
+                    self._random_relocate(any_floor=result.relocate_any_floor)
+                    if result.enter_room:
+                        events.extend(self._enter_room())
+                if self.player.hp <= 0:
+                    self._end_mode = Mode.GAME_OVER
+            return StepResult(events=events, mode=self.mode, needs_input=True)
 
-        # Explore-mode command routing.
         key = raw[0]
-
-        assert self.mode == Mode.EXPLORE
         if key not in EXPLORE_COMMANDS:
             return StepResult(
                 events=[Event.error("I don't understand that.")],
                 mode=self.mode,
                 needs_input=True,
             )
-        events.extend(self._handle_explore(key))
+        return StepResult(events=self._handle_explore(key), mode=self.mode, needs_input=True)
+
+    def attempt_cancel(self) -> StepResult:
+        if self.mode in {Mode.GAME_OVER, Mode.VICTORY}:
+            return StepResult(events=[], mode=self.mode, needs_input=False)
+        if self._shop_session:
+            result = self._shop_session.attempt_cancel()
+            if result.done:
+                self._shop_session = None
+            return StepResult(events=result.events, mode=self.mode, needs_input=True)
+        if self._encounter_session:
+            result = self._encounter_session.attempt_cancel()
+            events = result.events
+            if result.done:
+                self._encounter_session = None
+                if self.player.hp <= 0:
+                    self._end_mode = Mode.GAME_OVER
+            if result.relocate:
+                self._random_relocate(any_floor=result.relocate_any_floor)
+                if result.enter_room:
+                    events.extend(self._enter_room())
+            return StepResult(events=events, mode=self.mode, needs_input=True)
         return StepResult(
-            events=events,
+            events=[Event.info("I don't understand that.")],
             mode=self.mode,
             needs_input=True,
         )
 
     def prompt(self) -> str:
-        return self._next_prompt([])
+        if self._shop_session:
+            return self._shop_session.prompt()
+        if self._encounter_session:
+            return self._encounter_session.prompt()
+        return "--> "
 
     def status_events(self) -> list[Event]:
         events = [Event.status(self._status_data())]
@@ -116,6 +157,7 @@ class Game:
                     "DEBUG STATS: "
                     f"weapon_tier={self.player.weapon_tier} "
                     f"armor_tier={self.player.armor_tier} "
+                    f"weapon_broken={self.player.weapon_broken} "
                     f"armor_damaged={self.player.armor_damaged} "
                     f"temp_armor_bonus={self.player.temp_armor_bonus} "
                     f"fatigued={self.player.fatigued}"
@@ -123,23 +165,15 @@ class Game:
             )
         return events
 
-    def _next_prompt(self, events: list[Event]) -> str:
-        # Session-driven prompts override generic ones.
-        if self._shop_session:
-            return self._shop_session.prompt()
-        if self._encounter_session:
-            return self._encounter_session.prompt()
-        if any(event.kind == "PROMPT" for event in events):
-            return "?> "
-        return "--> "
-
     def resume_events(self) -> list[Event]:
-        events: list[Event] = []
-        # Encounter banner precedes the map on resume.
+        if self._shop_session:
+            return [
+                Event.info("There is a vendor here. Do you wish to purchase something?"),
+                *self._shop_session.resume_events(),
+            ]
         if self._encounter_session:
-            events.extend(self._encounter_session.start_events())
-        events.append(Event.map(self._map_grid()))
-        return events
+            return self._encounter_session.resume_events()
+        return self._describe_room(self._current_room())
 
     def _current_room(self):
         return self.dungeon.rooms[self.player.z][self.player.y][self.player.x]
@@ -182,7 +216,7 @@ class Game:
     def _move(self, dy: int, dx: int) -> list[Event]:
         ny = self.player.y + dy
         nx = self.player.x + dx
-        if ny not in range(self.SIZE) or nx not in range(self.SIZE):
+        if ny < 0 or ny >= self.SIZE or nx < 0 or nx >= self.SIZE:
             return [Event.info("A wall interposes itself.")]
         self.player.y = ny
         self.player.x = nx
@@ -191,16 +225,18 @@ class Game:
     def _stairs_up(self) -> list[Event]:
         room = self._current_room()
         if room.feature != Feature.STAIRS_UP:
-            return [
-                Event.info("There are no stairs leading up here, foolish adventurer.")
-            ]
+            return [Event.info("There are no stairs leading up here, foolish adventurer.")]
         self.player.z += 1
         return self._enter_room()
 
     def _stairs_down(self) -> list[Event]:
         room = self._current_room()
         if room.feature != Feature.STAIRS_DOWN:
-            return [Event.info("There is no downward staircase here.")]
+            return [
+                Event.info(
+                    "There is no downward staircase here, so how do you propose to go down?"
+                )
+            ]
         self.player.z -= 1
         return self._enter_room()
 
@@ -209,61 +245,76 @@ class Game:
         room = self._current_room()
         room.seen = True
 
-        # Encounter start takes precedence over room features/treasure.
         if room.monster_level > 0:
             self._encounter_session = EncounterSession.start(
-                rng=self.rng, player=self.player, room=room, debug=self.debug
+                rng=self.rng,
+                player=self.player,
+                monster_level=room.monster_level,
+                debug=self.debug,
             )
-            events.extend(self._encounter_session.start_events())
-            self.mode = Mode.ENCOUNTER
-            return events
+            return self._encounter_session.start_events()
 
         if room.treasure_id:
             events.extend(self._award_treasure(room.treasure_id))
             room.treasure_id = 0
 
         match room.feature:
-            case Feature.MIRROR:
-                events.append(
-                    Event.info("There is a magic mirror mounted on the wall here.")
-                )
-            case Feature.SCROLL:
-                events.append(Event.info("There is a spell scroll here."))
-            case Feature.CHEST:
-                events.append(Event.info("There is a chest here."))
             case Feature.FLARES:
                 gained = self.rng.randint(1, 5)
                 self.player.flares += gained
                 room.feature = Feature.EMPTY
-                events.append(Event.info(f"You pick up {gained} flares."))
-            case Feature.POTION:
-                events.append(Event.info("There is a magic potion here."))
-            case Feature.VENDOR:
-                events.append(Event.info("There is a vendor here."))
+                events.append(Event.info("You pick up some flares here."))
             case Feature.THIEF:
                 stolen = min(self.rng.randint(1, 50), self.player.gold)
                 self.player.gold -= stolen
                 room.feature = Feature.EMPTY
-                events.append(Event.info(f"A thief steals {stolen} gold pieces."))
+                events.append(
+                    Event.info(
+                        f"A thief sneaks from the shadows and removes {stolen} gold "
+                        f"{_pluralize(stolen, 'piece')} from your possession."
+                    )
+                )
             case Feature.WARP:
                 events.append(
                     Event.info(
-                        "This room contains a warp. You are whisked elsewhere..."
+                        "This room contains a warp. Before you realize what is going on, "
+                        "you appear elsewhere..."
                     )
                 )
                 self._random_relocate(any_floor=True)
                 events.extend(self._enter_room())
+            case _:
+                events.extend(self._describe_room(room))
+        return events
+
+    def _describe_room(self, room) -> list[Event]:
+        events: list[Event] = []
+        if room.monster_level > 0:
+            name = MONSTER_NAMES[room.monster_level - 1]
+            return [Event.combat(f"You are facing an angry {name}!")]
+        if room.treasure_id:
+            events.append(Event.loot(f"You find the {self._treasure_name(room.treasure_id)}!"))
+        match room.feature:
+            case Feature.MIRROR:
+                events.append(Event.info("There is a magic mirror mounted on the wall here."))
+            case Feature.SCROLL:
+                events.append(Event.info("There is a spell scroll here."))
+            case Feature.CHEST:
+                events.append(Event.info("There is a chest here."))
+            case Feature.POTION:
+                events.append(Event.info("There is a magic potion here."))
+            case Feature.VENDOR:
+                events.append(
+                    Event.info("There is a vendor here. Do you wish to purchase something?")
+                )
             case Feature.STAIRS_UP:
                 events.append(Event.info("There are stairs up here."))
             case Feature.STAIRS_DOWN:
                 events.append(Event.info("There are stairs down here."))
             case Feature.EXIT:
-                events.append(
-                    Event.info("You see the exit to the Dungeon of Doom here.")
-                )
+                events.append(Event.info("You see the exit to the DUNGEON of DOOM here."))
             case _:
                 events.append(Event.info("This room is empty."))
-
         return events
 
     def _attempt_exit(self) -> list[Event]:
@@ -271,14 +322,17 @@ class Game:
         if room.feature != Feature.EXIT:
             return [Event.info("There is no exit here.")]
         if len(self.player.treasures_found) < 10:
-            self.mode = Mode.GAME_OVER
+            self._end_mode = Mode.GAME_OVER
             remaining = 10 - len(self.player.treasures_found)
             return [
+                Event.info("What? And hast thou abandoned thy quest before it was accomplished?"),
                 Event.info(
-                    f"You abandon your quest with {remaining} treasures remaining."
-                )
+                    "The DUNGEON of DOOM still holds "
+                    f"{remaining} treasures that thine eyes shall never behold! "
+                    "Verily thy triumph is incomplete!"
+                ),
             ]
-        self.mode = Mode.VICTORY
+        self._end_mode = Mode.VICTORY
         return [Event.info("ALL HAIL THE VICTOR!")]
 
     def _use_flare(self) -> list[Event]:
@@ -291,30 +345,26 @@ class Game:
                     continue
                 ny = self.player.y + dy
                 nx = self.player.x + dx
-                if ny in range(self.SIZE) and nx in range(self.SIZE):
+                if ny >= 0 and ny < self.SIZE and nx >= 0 and nx < self.SIZE:
                     self.dungeon.rooms[self.player.z][ny][nx].seen = True
-        return [
-            Event.info("The flare illuminates nearby rooms."),
-            Event.map(self._map_grid()),
-        ]
+        return [Event.info("The flare illuminates nearby rooms.")]
 
     def _map_grid(self) -> list[str]:
         grid: list[str] = []
         for y in range(self.SIZE):
-            row = []
+            row: list[str] = []
             for x in range(self.SIZE):
                 room = self.dungeon.rooms[self.player.z][y][x]
                 if self.player.y == y and self.player.x == x:
                     row.append("*")
                 elif not room.seen:
-                    row.append("?")
+                    row.append("·")
+                elif room.monster_level > 0:
+                    row.append("M")
+                elif room.treasure_id:
+                    row.append("T")
                 else:
-                    if room.monster_level > 0:
-                        row.append("M")
-                    elif room.treasure_id:
-                        row.append("T")
-                    else:
-                        row.append(FEATURE_SYMBOLS.get(room.feature, "0"))
+                    row.append(FEATURE_SYMBOLS.get(room.feature, "-"))
             grid.append(" ".join(row))
         return grid
 
@@ -347,16 +397,19 @@ class Game:
             "Encounter: F=Fight  R=Run  S=Spell\n"
             "\n"
             "MAP LEGEND:\n"
-            "0=Empty  m=Mirror  s=Scroll  c=Chest  f=Flares  p=Potion\n"
+            "-=Empty  m=Mirror  s=Scroll  c=Chest  f=Flares  p=Potion\n"
             "v=Vendor  t=Thief  w=Warp  U=Up  D=Down  X=eXit\n"
-            "T=Treasure  M=Monster  *=You  ?=Unknown"
+            "T=Treasure  M=Monster  *=You  ·=Unknown"
         )
 
     def _use_mirror(self) -> list[Event]:
         room = self._current_room()
         if room.feature != Feature.MIRROR:
             return [Event.info("There is no mirror here.")]
-        if self.rng.randint(1, 50) > self.player.iq:
+        events: list[Event] = []
+        if len(self.player.treasures_found) == 10:
+            events.append(Event.info("The mirror is cloudy and yields no vision."))
+        elif self.rng.randint(1, 50) > self.player.iq:
             visions = [
                 "The mirror is cloudy and yields no vision.",
                 "You see yourself dead and lying in a black coffin.",
@@ -365,51 +418,74 @@ class Game:
                 "You see the exit on the 7th floor, big and friendly-looking.",
             ]
             if self.rng.randint(1, 10) <= 5:
-                return [Event.info(self.rng.choice(visions))]
-            treasure = self.rng.randint(1, 10)
-            tx = self.rng.randint(1, self.SIZE)
-            ty = self.rng.randint(1, self.SIZE)
-            tz = self.rng.randint(1, self.SIZE)
-            return [
-                Event.info(
-                    f"You see the {self._treasure_name(treasure)} at {tz},{ty},{tx}!"
+                events.append(Event.info(self.rng.choice(visions)))
+            else:
+                treasure = self.rng.randint(1, 10)
+                tx = self.rng.randint(1, self.SIZE)
+                ty = self.rng.randint(1, self.SIZE)
+                tz = self.rng.randint(1, self.SIZE)
+                events.append(
+                    Event.info(f"You see the {self._treasure_name(treasure)} at {tz},{ty},{tx}!")
                 )
+        else:
+            locations = [
+                (candidate.treasure_id, z, y, x)
+                for z, floor in enumerate(self.dungeon.rooms)
+                for y, row in enumerate(floor)
+                for x, candidate in enumerate(row)
+                if candidate.treasure_id
+                and candidate.treasure_id not in self.player.treasures_found
             ]
-
-        locations = [
-            (room.treasure_id, z, y, x)
-            for z, floor in enumerate(self.dungeon.rooms)
-            for y, row in enumerate(floor)
-            for x, room in enumerate(row)
-            if room.treasure_id and room.treasure_id not in self.player.treasures_found
-        ]
-        if not locations:
-            return [Event.info("The mirror is cloudy and yields no vision.")]
-        treasure, z, y, x = self.rng.choice(locations)
-        return [
-            Event.info(
-                f"You see the {self._treasure_name(treasure)} at {z + 1},{y + 1},{x + 1}!"
-            )
-        ]
+            if not locations:
+                events.append(Event.info("The mirror is cloudy and yields no vision."))
+            else:
+                treasure, z, y, x = self.rng.choice(locations)
+                events.append(
+                    Event.info(
+                        f"You see the {self._treasure_name(treasure)} at {z + 1},{y + 1},{x + 1}!"
+                    )
+                )
+        room.feature = Feature.EMPTY
+        return events
 
     def _open_chest(self) -> list[Event]:
         room = self._current_room()
         if room.feature != Feature.CHEST:
             return [Event.info("There is no chest here.")]
         room.feature = Feature.EMPTY
-        roll = self.rng.randint(1, 5)
-        match roll:
-            case 1:
-                return [Event.info("It containeth naught.")]
-            case 2:
-                if self.player.armor_tier > 0:
-                    self.player.armor_tier -= 1
-                    self.player.armor_damaged = True
-                return [Event.info("The perverse thing explodes, damaging your armor!")]
-            case _:
-                gold = 10 + self.rng.randint(0, 20)
-                self.player.gold += gold
-                return [Event.info(f"You find {gold} gold pieces!")]
+        roll = self.rng.randint(1, 10)
+        if roll == 1:
+            if self.player.armor_tier > 0:
+                self.player.armor_tier -= 1
+                if self.player.armor_tier == 0:
+                    self.player.armor_name = ARMOR_NAMES[0]
+                    self.player.armor_damaged = False
+                    return [
+                        Event.info(
+                            "The perverse thing explodes as you open it, destroying your armour!"
+                        )
+                    ]
+                self.player.armor_damaged = True
+                return [
+                    Event.info(
+                        "The perverse thing explodes as you open it, damaging your armour!"
+                    )
+                ]
+            self.player.armor_name = ARMOR_NAMES[0]
+            self.player.armor_damaged = False
+            self.player.hp -= self.rng.randint(0, 4) + 3
+            if self.player.hp <= 0:
+                self._end_mode = Mode.GAME_OVER
+                return [
+                    Event.info("The perverse thing explodes as you open it, wounding you!"),
+                    Event.info("YOU HAVE DIED."),
+                ]
+            return [Event.info("The perverse thing explodes as you open it, wounding you!")]
+        if roll in {2, 3, 4}:
+            return [Event.info("It containeth naught.")]
+        gold = 10 + self.rng.randint(0, 20)
+        self.player.gold += gold
+        return [Event.info(f"You find {gold} gold {_pluralize(gold, 'piece')}!")]
 
     def _read_scroll(self) -> list[Event]:
         room = self._current_room()
@@ -429,16 +505,13 @@ class Game:
         if roll == 1:
             heal = 5 + self.rng.randint(1, 10)
             self.player.hp = min(self.player.mhp, self.player.hp + heal)
-            return [Event.info("You drink the potion... healing results.")]
-
+            return drink_healing_potion_events()
         effect = self.rng.choice(["STR", "DEX", "IQ", "MHP"])
-        change = self.rng.randint(1, 6)
+        change = self.rng.randint(1, 3)
         if self.rng.random() > 0.5:
             change = -change
         self.player.apply_attribute_change(target=effect, change=change)
-        return [
-            Event.info("You drink the potion... strange energies surge through you.")
-        ]
+        return drink_attribute_potion_events(target=effect, change=change)
 
     def _open_vendor(self) -> list[Event]:
         room = self._current_room()

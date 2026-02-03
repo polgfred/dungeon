@@ -1,20 +1,27 @@
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass
 
-from dungeon.constants import MONSTER_NAMES, TREASURE_NAMES, Mode, Spell
-from dungeon.model import Player, Room
+from dungeon.constants import MONSTER_NAMES, Spell
+from dungeon.model import Player
 from dungeon.types import Event
 
 
 @dataclass
 class EncounterResult:
     events: list[Event]
-    mode: Mode
+    done: bool = False
+    defeated_monster: bool = False
     relocate: bool = False
     relocate_any_floor: bool = False
     enter_room: bool = False
+
+
+def _reset_player_after_encounter(player: Player) -> None:
+    player.fatigued = False
+    player.temp_armor_bonus = 0
 
 
 class EncounterSession:
@@ -23,7 +30,6 @@ class EncounterSession:
         *,
         rng: random.Random,
         player: Player,
-        room: Room,
         monster_level: int,
         monster_name: str,
         vitality: int,
@@ -31,7 +37,6 @@ class EncounterSession:
     ) -> None:
         self.rng = rng
         self.player = player
-        self.room = room
         self.monster_level = monster_level
         self.monster_name = monster_name
         self.vitality = vitality
@@ -40,85 +45,83 @@ class EncounterSession:
 
     @classmethod
     def start(
-        cls, *, rng: random.Random, player: Player, room: Room, debug: bool
+        cls,
+        *,
+        rng: random.Random,
+        player: Player,
+        monster_level: int,
+        debug: bool,
     ) -> "EncounterSession":
-        # Initialize encounter state from the room and reset temporary flags.
-        level = room.monster_level
-        name = MONSTER_NAMES[level - 1]
-        vitality = 3 * level + rng.randint(0, 3)
-        player.fatigued = False
-        player.temp_armor_bonus = 0
+        name = MONSTER_NAMES[monster_level - 1]
+        vitality = 3 * monster_level + rng.randint(0, 3)
+        _reset_player_after_encounter(player)
         return cls(
             rng=rng,
             player=player,
-            room=room,
-            monster_level=level,
+            monster_level=monster_level,
             monster_name=name,
             vitality=vitality,
             debug=debug,
         )
 
     def start_events(self) -> list[Event]:
-        events = [
-            Event.combat(f"You are facing an angry {self.monster_name}!"),
-            Event.info("Encounter mode: F=Fight  R=Run  S=Spell"),
-        ]
+        events = [Event.combat(f"You are facing an angry {self.monster_name}!")]
         if self.debug:
             events.append(self._debug_monster_event())
         return events
 
-    def prompt(self) -> str:
+    def resume_events(self) -> list[Event]:
         if self.awaiting_spell:
-            return "?> "
-        return "F/R/S> "
+            return [Event.prompt("Choose a spell:", options=self._spell_menu())]
+        return self.start_events()
+
+    def prompt(self) -> str:
+        return "?> " if self.awaiting_spell else "F/R/S> "
+
+    def attempt_cancel(self) -> EncounterResult:
+        if not self.awaiting_spell:
+            return self._with_debug(
+                EncounterResult(events=[Event.info("I don't understand that.")])
+            )
+        self.awaiting_spell = False
+        return self._with_debug(
+            EncounterResult(events=[Event.info("You ready yourself for the fight.")])
+        )
 
     def step(self, raw: str) -> EncounterResult:
-        def _with_debug(result: EncounterResult) -> EncounterResult:
-            if not self.debug:
-                return result
-            return EncounterResult(
-                [self._debug_monster_event(), *result.events],
-                result.mode,
-                relocate=result.relocate,
-                relocate_any_floor=result.relocate_any_floor,
-                enter_room=result.enter_room,
-            )
-
-        # Input handling: pending spell selection vs action command.
         if self.awaiting_spell:
-            return _with_debug(self._handle_spell_choice(raw))
+            return self._with_debug(self._handle_spell_choice(raw))
         if not raw:
-            return _with_debug(
-                EncounterResult(
-                    [Event.error("I don't understand that.")], Mode.ENCOUNTER
-                )
+            return self._with_debug(
+                EncounterResult(events=[Event.error("I don't understand that.")])
             )
         key = raw[0]
         match key:
             case "F":
-                return _with_debug(self._fight_round())
+                return self._with_debug(self._fight_round())
             case "R":
-                return _with_debug(self._run_attempt())
+                return self._with_debug(self._run_attempt())
             case "S":
                 self.awaiting_spell = True
-                return _with_debug(
+                return self._with_debug(
                     EncounterResult(
-                        [Event.prompt("Choose a spell:", data=self._spell_menu())],
-                        Mode.ENCOUNTER,
+                        events=[Event.prompt("Choose a spell:", options=self._spell_menu())]
                     )
                 )
             case _:
-                return _with_debug(
-                    EncounterResult(
-                        [Event.error("I don't understand that.")], Mode.ENCOUNTER
-                    )
+                return self._with_debug(
+                    EncounterResult(events=[Event.error("I don't understand that.")])
                 )
+
+    def _with_debug(self, result: EncounterResult) -> EncounterResult:
+        if not self.debug:
+            return result
+        result.events.append(self._debug_monster_event())
+        return result
 
     def _debug_monster_event(self) -> Event:
         return Event.debug(
-            "DEBUG MONSTER: "
-            f"name={self.monster_name} level={self.monster_level} "
-            f"vitality={self.vitality}"
+            f"DEBUG MONSTER: name={self.monster_name} level={self.monster_level} vitality={self.vitality}"
         )
 
     def _fight_round(self) -> EncounterResult:
@@ -127,16 +130,13 @@ class EncounterSession:
         attack_score = (
             20 + 5 * (11 - level) + self.player.dex + 3 * self.player.weapon_tier
         )
-
-        # Resolve player attack.
         roll = self.rng.randint(1, 100)
         if self.debug:
             events.append(
                 Event.debug(
                     "DEBUG FIGHT: "
                     f"attack_score={attack_score} roll={roll} "
-                    f"weapon_tier={self.player.weapon_tier} "
-                    f"str={self.player.str_} dex={self.player.dex}"
+                    f"weapon_tier={self.player.weapon_tier} str={self.player.str_} dex={self.player.dex}"
                 )
             )
         if roll > attack_score:
@@ -144,7 +144,7 @@ class EncounterSession:
         else:
             damage = max(
                 self.player.weapon_tier
-                + self.player.str_ // 3
+                + math.floor(self.player.str_ / 3)
                 + self.rng.randint(0, 4)
                 - 2,
                 1,
@@ -153,50 +153,50 @@ class EncounterSession:
             events.append(Event.combat(f"You hit the {self.monster_name}!"))
             if self.debug:
                 events.append(
-                    Event.debug(
-                        "DEBUG FIGHT: " f"damage={damage} vitality={self.vitality}"
-                    )
+                    Event.debug(f"DEBUG FIGHT: damage={damage} vitality={self.vitality}")
                 )
             if self.vitality <= 0:
                 return self._handle_monster_death(events)
             if self.rng.random() < 0.05 and self.player.weapon_tier > 0:
                 self.player.weapon_tier = 0
-                self.player.weapon_name = "(Broken)"
+                self.player.weapon_broken = True
                 events.append(Event.info("Your weapon breaks with the impact!"))
 
-        # Resolve monster response.
-        attack_events, mode = self._monster_attack()
-        events.extend(attack_events)
-        return EncounterResult(events, mode)
+        attack_result = self._monster_attack()
+        events.extend(attack_result.events)
+        return EncounterResult(events=events, done=attack_result.done)
 
     def _run_attempt(self) -> EncounterResult:
-        # Attempt escape or apply fatigue.
         if self.player.fatigued:
             return EncounterResult(
-                [Event.info("You are quite fatigued after your previous efforts.")],
-                Mode.ENCOUNTER,
+                events=[Event.info("You are quite fatigued after your previous efforts.")]
             )
         if self.rng.random() < 0.4:
-            events = [Event.info("You slip away and the monster no longer follows.")]
+            _reset_player_after_encounter(self.player)
             return EncounterResult(
-                events,
-                Mode.EXPLORE,
+                events=[
+                    Event.info(
+                        f"You turn and flee, the vile {self.monster_name} following close behind."
+                    ),
+                    Event.info(
+                        f"Suddenly, you realize that the {self.monster_name} is no longer following you."
+                    ),
+                ],
+                done=True,
                 relocate=True,
                 relocate_any_floor=False,
                 enter_room=True,
             )
         self.player.fatigued = True
         return EncounterResult(
-            [
+            events=[
                 Event.info(
                     "Although you run your hardest, your efforts to escape are made in vain."
                 )
-            ],
-            Mode.ENCOUNTER,
+            ]
         )
 
-    def _monster_attack(self) -> tuple[list[Event], Mode]:
-        # Resolve monster attack and damage.
+    def _monster_attack(self) -> EncounterResult:
         events: list[Event] = []
         level = self.monster_level
         dodge_score = 20 + 5 * (11 - level) + 2 * self.player.dex
@@ -206,162 +206,148 @@ class EncounterSession:
                 Event.debug(
                     "DEBUG MONSTER: "
                     f"dodge_score={dodge_score} roll={roll} "
-                    f"armor_tier={self.player.armor_tier} "
-                    f"temp_armor_bonus={self.player.temp_armor_bonus}"
+                    f"armor_tier={self.player.armor_tier} temp_armor_bonus={self.player.temp_armor_bonus}"
                 )
             )
         if roll <= dodge_score:
             events.append(Event.combat("You deftly dodge the blow!"))
-            return events, Mode.ENCOUNTER
+            return EncounterResult(events=events)
 
         armor = self.player.armor_tier + self.player.temp_armor_bonus
-        damage = max(self.rng.randint(0, level - 1) + 3 - armor, 0)
+        damage = max(
+            self.rng.randint(0, level - 1) + math.floor(2.5 + level / 3) - armor,
+            0,
+        )
         self.player.hp -= damage
         events.append(Event.combat(f"The {self.monster_name} hits you!"))
         if self.debug:
-            events.append(
-                Event.debug(f"DEBUG MONSTER: damage={damage} hp={self.player.hp}")
-            )
+            events.append(Event.debug(f"DEBUG MONSTER: damage={damage} hp={self.player.hp}"))
         if self.player.hp <= 0:
             events.append(Event.info("YOU HAVE DIED."))
-            return events, Mode.GAME_OVER
-        return events, Mode.ENCOUNTER
+            return EncounterResult(events=events, done=True)
+        return EncounterResult(events=events)
 
     def _handle_monster_death(self, events: list[Event]) -> EncounterResult:
         events.append(Event.combat(f"The foul {self.monster_name} expires."))
-        # Resolve final attack, if any.
         if self.rng.random() > 0.7:
             events.append(
-                Event.combat("As it dies, it launches one final desperate attack.")
+                Event.combat("As he dies, though, he launches one final desperate attack.")
             )
-            attack_events, mode = self._monster_attack()
-            events.extend(attack_events)
-            if mode == Mode.GAME_OVER:
-                self.room.monster_level = 0
+            attack_result = self._monster_attack()
+            events.extend(attack_result.events)
+            if attack_result.done:
                 self.monster_level = 0
                 self.monster_name = ""
                 self.vitality = 0
-                return EncounterResult(events, mode)
+                return EncounterResult(events=events, done=True, defeated_monster=True)
 
-        # Resolve rewards and cleanup.
-        if self.room.treasure_id:
-            events.extend(self._award_treasure(self.room.treasure_id))
-            self.room.treasure_id = 0
-        else:
-            gold = 5 * self.monster_level + self.rng.randint(0, 20)
-            self.player.gold += gold
-            events.append(Event.loot(f"You found {gold} gold pieces."))
-
-        self.room.monster_level = 0
         self.monster_level = 0
         self.monster_name = ""
         self.vitality = 0
-        return EncounterResult(events, Mode.EXPLORE)
+        _reset_player_after_encounter(self.player)
+        return EncounterResult(events=events, done=True, defeated_monster=True)
 
     def _handle_spell_choice(self, raw: str) -> EncounterResult:
-        # Validate selection and charges before casting.
         self.awaiting_spell = False
-        if raw not in {"1", "2", "3", "4", "5"}:
-            return EncounterResult([Event.error("Choose 1..5.")], Mode.ENCOUNTER)
-        spell = Spell(int(raw))
+        spell_map = {
+            "P": Spell.PROTECTION,
+            "F": Spell.FIREBALL,
+            "L": Spell.LIGHTNING,
+            "W": Spell.WEAKEN,
+            "T": Spell.TELEPORT,
+        }
+        spell = spell_map.get(raw[:1])
+        if spell is None:
+            return EncounterResult(events=[Event.error("Choose P/F/L/W/T or Esc to cancel.")])
         charges = self.player.spells.get(spell, 0)
         if self.player.iq < 12:
-            return EncounterResult(
-                [Event.info("You have insufficient intelligence.")], Mode.ENCOUNTER
-            )
+            return EncounterResult(events=[Event.info("You have insufficient intelligence.")])
         if charges <= 0:
-            return EncounterResult(
-                [Event.info("You know not that spell.")], Mode.ENCOUNTER
-            )
+            return EncounterResult(events=[Event.info("You know not that spell.")])
 
         self.player.spells[spell] = charges - 1
         return self._cast_spell(spell)
 
-    def _spell_menu(self) -> dict:
+    def _spell_menu(self) -> list[dict[str, object]]:
+        iq_too_low = self.player.iq < 12
         spells = self.player.spells
-        return {
-            "type": "spell",
-            "options": {
-                "protection": spells.get(Spell.PROTECTION, 0),
-                "fireball": spells.get(Spell.FIREBALL, 0),
-                "lightning": spells.get(Spell.LIGHTNING, 0),
-                "weaken": spells.get(Spell.WEAKEN, 0),
-                "teleport": spells.get(Spell.TELEPORT, 0),
+        return [
+            {
+                "key": "P",
+                "label": f"Protection ({spells.get(Spell.PROTECTION, 0)})",
+                "disabled": iq_too_low or spells.get(Spell.PROTECTION, 0) <= 0,
             },
-        }
+            {
+                "key": "F",
+                "label": f"Fireball ({spells.get(Spell.FIREBALL, 0)})",
+                "disabled": iq_too_low or spells.get(Spell.FIREBALL, 0) <= 0,
+            },
+            {
+                "key": "L",
+                "label": f"Lightning ({spells.get(Spell.LIGHTNING, 0)})",
+                "disabled": iq_too_low or spells.get(Spell.LIGHTNING, 0) <= 0,
+            },
+            {
+                "key": "W",
+                "label": f"Weaken ({spells.get(Spell.WEAKEN, 0)})",
+                "disabled": iq_too_low or spells.get(Spell.WEAKEN, 0) <= 0,
+            },
+            {
+                "key": "T",
+                "label": f"Teleport ({spells.get(Spell.TELEPORT, 0)})",
+                "disabled": iq_too_low or spells.get(Spell.TELEPORT, 0) <= 0,
+            },
+        ]
 
     def _cast_spell(self, spell: Spell) -> EncounterResult:
         events: list[Event] = []
-        # Apply spell effect and follow-up resolution.
         match spell:
             case Spell.PROTECTION:
                 self.player.temp_armor_bonus += 3
-                events.append(
-                    Event.info("Your armor glows briefly in response to your spell.")
-                )
-                if self.debug:
+                if self.player.armor_tier > 0:
                     events.append(
-                        Event.debug(
-                            "DEBUG SPELL: protection_bonus=3 "
-                            f"temp_armor_bonus={self.player.temp_armor_bonus}"
+                        Event.info("Your armour glows briefly in response to your spell.")
+                    )
+                else:
+                    events.append(
+                        Event.info(
+                            "Your clothes glow briefly, becoming, temporarily, armour."
                         )
                     )
-                attack_events, mode = self._monster_attack()
-                events.extend(attack_events)
-                return EncounterResult(events, mode)
             case Spell.FIREBALL:
                 roll = self.rng.randint(1, 5)
-                damage = max(roll - (self.player.iq // 3), 0)
+                damage = roll + math.floor(self.player.iq / 3)
                 self.vitality -= damage
-                if self.debug:
-                    events.append(
-                        Event.debug(
-                            "DEBUG SPELL: "
-                            f"fireball_roll={roll} iq={self.player.iq} "
-                            f"damage={damage} vitality={self.vitality}"
-                        )
-                    )
                 events.append(
-                    Event.combat(f"A ball of fire scorches the {self.monster_name}.")
+                    Event.combat(
+                        f"A glowing ball of fire converges with the {self.monster_name}."
+                    )
                 )
             case Spell.LIGHTNING:
                 roll = self.rng.randint(1, 10)
-                damage = max(roll - (self.player.iq // 2), 0)
+                damage = roll + math.floor(self.player.iq / 2)
                 self.vitality -= damage
-                if self.debug:
-                    events.append(
-                        Event.debug(
-                            "DEBUG SPELL: "
-                            f"lightning_roll={roll} iq={self.player.iq} "
-                            f"damage={damage} vitality={self.vitality}"
-                        )
-                    )
-                events.append(
-                    Event.combat(f"The {self.monster_name} is thunderstruck!")
-                )
+                events.append(Event.combat(f"The {self.monster_name} is thunderstruck!"))
             case Spell.WEAKEN:
-                self.vitality = self.vitality // 2
-                if self.debug:
-                    events.append(
-                        Event.debug(
-                            "DEBUG SPELL: " f"weakened_vitality={self.vitality}"
-                        )
+                self.vitality = math.floor(self.vitality / 2)
+                events.append(
+                    Event.combat(
+                        f"A green mist envelops the {self.monster_name}, depriving him of half his vitality."
                     )
-                events.append(Event.combat("A green mist envelops your foe."))
+                )
             case Spell.TELEPORT:
                 events.append(
                     Event.info(
-                        "Thy surroundings vibrate as you are transported elsewhere..."
+                        "Thy surroundings vibrate momentarily, as you are magically transported elsewhere..."
                     )
                 )
                 self.monster_level = 0
                 self.monster_name = ""
                 self.vitality = 0
-                if self.debug:
-                    events.append(Event.debug("DEBUG SPELL: teleport"))
+                _reset_player_after_encounter(self.player)
                 return EncounterResult(
-                    events,
-                    Mode.EXPLORE,
+                    events=events,
+                    done=True,
                     relocate=True,
                     relocate_any_floor=False,
                     enter_room=True,
@@ -369,12 +355,6 @@ class EncounterSession:
 
         if self.vitality <= 0:
             return self._handle_monster_death(events)
-        attack_events, mode = self._monster_attack()
-        events.extend(attack_events)
-        return EncounterResult(events, mode)
-
-    def _award_treasure(self, treasure_id: int) -> list[Event]:
-        if treasure_id in self.player.treasures_found:
-            return []
-        self.player.treasures_found.add(treasure_id)
-        return [Event.loot(f"You find the {TREASURE_NAMES[treasure_id - 1]}!")]
+        attack_result = self._monster_attack()
+        events.extend(attack_result.events)
+        return EncounterResult(events=events, done=attack_result.done)

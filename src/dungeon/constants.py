@@ -85,8 +85,8 @@ TREASURE_NAMES = [
     "Silmaril",
 ]
 
-WEAPON_NAMES = ["none", "Dagger", "Short sword", "Broadsword"]
-ARMOR_NAMES = ["none", "Leather", "Wooden", "Chain mail"]
+WEAPON_NAMES = ["(None)", "Dagger", "Short sword", "Broadsword"]
+ARMOR_NAMES = ["(None)", "Leather", "Wooden", "Chain mail"]
 
 WEAPON_PRICES = {1: 10, 2: 20, 3: 30}
 ARMOR_PRICES = {1: 10, 2: 20, 3: 30}
@@ -105,7 +105,7 @@ POTION_PRICES = {
 }
 
 FEATURE_SYMBOLS = {
-    Feature.EMPTY: "0",
+    Feature.EMPTY: "-",
     Feature.MIRROR: "m",
     Feature.SCROLL: "s",
     Feature.CHEST: "c",
